@@ -11,7 +11,6 @@ export const coinsFor = (wave, kills) => wave * 10 + kills;
 
 // 抽奖
 export const GACHA_COST = 100;
-export const GACHA_CHAR_WEIGHT = 0.6;  // 抽出进阶字的概率，其余出道具
 
 // 商城直接购买进阶字（随机未解锁）
 export const SHOP_CHAR_COST = 150;

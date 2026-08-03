@@ -15,7 +15,7 @@ const DEFAULT_SAVE = {
   // 图鉴：各类已解锁 key
   codex: { base: [], prefix: [], hero: [] },
   merit: { total: 0, claimed: {} },
-  gacha: { smallPity: 0, bigPity: 0 },
+  gacha: { smallPity: 0, bigPity: 0, history: [] },
   shop: { stock: [] },
 };
 

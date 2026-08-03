@@ -4,7 +4,7 @@
 
 This repository is a Three Kingdoms-themed Chinese character tower-defense game. It runs entirely in the browser with Vite, plain ES modules, and Canvas 2D. The current handoff branch is `feature/gameplay-overhaul`, based on `master`, and the remote is `git@github.com:AaronChou313/wordward-game.git`.
 
-The battle-core milestone is implemented and reviewed. The progression/collection milestone and online account/ranking milestone are designed and planned but not yet implemented. Do not assume the original 13-item request is complete until those two plans are finished.
+The battle-core milestone is implemented and reviewed. Progression Task 1 (data-driven gacha and dual pity) is implemented and independently reviewed; Progression Tasks 2–6 and the online account/ranking milestone remain. Do not assume the original 13-item request is complete until those plans are finished.
 
 ## Technology and Commands
 
@@ -16,7 +16,7 @@ The battle-core milestone is implemented and reviewed. The progression/collectio
 - Production build: `npm run build`
 - Preview build: `npm run preview`
 
-Latest verified result before this handoff: 9 test files, 76 tests passed; Vite production build passed with 45 transformed modules; `git diff --check` was clean.
+Latest verified result before this handoff: 10 test files, 94 tests passed; Vite production build passed with 47 transformed modules; `git diff --check` was clean.
 
 ## Repository Layout
 
@@ -59,12 +59,25 @@ Important battle modules added during this milestone include:
 
 Implement [the progression plan](docs/superpowers/plans/2026-08-03-progression-systems.md) next, task by task and test-first. Required scope:
 
-1. Data-driven gacha with published reward categories/rates, persistent 10-pull rare guarantee, and 50-pull precious guarantee.
-2. Stronger active/passive item identities and additional tactical items.
+1. Completed: data-driven gacha with published base/next-draw reward rates, persistent 10-pull rare guarantee, and 50-pull precious guarantee.
+2. Next: stronger active/passive item identities and additional tactical items.
 3. Additional advanced characters/word combinations with unique strategic roles.
 4. Clickable codex detail panels for units, words, items, elites, and Bosses.
 5. Shop inventory containing up to four unique unowned items, refreshed only after battle settlement; upgrades remain in inventory.
 6. Full progression regression pass.
+
+## Completed: Progression Task 1
+
+The commit subject is `feat: add transparent dual-pity gacha`. The implementation adds:
+
+- Rarity-first, injectable draws driven by `src/config/gacha.js`, with normal rates 72% common, 23% rare, and 5% precious.
+- Effective next-draw probabilities shared by the engine and UI, including 0/95/5 on the tenth-draw guarantee and 0/0/100 on the fiftieth-draw guarantee.
+- Persistent pity counters and up to ten recent results in save V2 without losing older save fields.
+- Useful rewards only: gold, advanced characters, and items. Duplicate characters convert to gold; duplicate items upgrade.
+- Distinct precious value: locked characters are preferred while any remain, and precious items grant two levels instead of one.
+- A draggable gacha panel showing base rates, next-draw rates, every reward category, pity distance, and recent results.
+
+Independent review found no Critical or Important issues after fixes. Non-blocking regression candidates remain for the all-characters-unlocked precious fallback, first-time precious item Lv2, full 10/50 sequential draws, and a real localStorage reload path; cover them during Task 6 even if later task work does not touch gacha.
 
 The approved behavior is in [the progression design](docs/superpowers/specs/2026-08-03-progression-systems-design.md). Save V2 already contains `gacha.smallPity`, `gacha.bigPity`, and `shop.stock` placeholders for this milestone.
 
@@ -120,5 +133,6 @@ Then read `AGENTS.md`, this file, the approved specs, and the next implementatio
 - Baseline branch: `master`
 - Development branch: `feature/gameplay-overhaul`
 - Battle-core integration fixes culminate at `2524fc2`; legacy endless migration fixes follow it.
+- Progression Task 1 uses the focused commit subject `feat: add transparent dual-pity gacha`; use `git log` for its immutable hash after checkout.
 - The `.superpowers/` execution ledger and agent reports are intentionally ignored and will not be available after cloning. The tracked specs, plans, tests, commits, and this handoff are the durable record.
 - No pull request was created during this handoff. Confirm the branch on GitHub after push before switching devices.

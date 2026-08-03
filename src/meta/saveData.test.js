@@ -25,8 +25,25 @@ describe('migrateSave', () => {
       ...version1Save,
       version: 2,
       merit: { total: 0, claimed: {} },
-      gacha: { smallPity: 0, bigPity: 0 },
+      gacha: { smallPity: 0, bigPity: 0, history: [] },
       shop: { stock: [] },
+    });
+  });
+
+  it('preserves dual-pity counters and recent results across reload migration', () => {
+    const migrated = migrateSave({
+      version: 2,
+      gacha: {
+        smallPity: 7,
+        bigPity: 42,
+        history: [{ rarity: 'rare', message: '获得进阶字「关」' }],
+      },
+    });
+
+    expect(migrated.gacha).toEqual({
+      smallPity: 7,
+      bigPity: 42,
+      history: [{ rarity: 'rare', message: '获得进阶字「关」' }],
     });
   });
 
