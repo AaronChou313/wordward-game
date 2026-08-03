@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .superpowers/
+.worktrees/
 .env
 .env.*
 !.env.example
