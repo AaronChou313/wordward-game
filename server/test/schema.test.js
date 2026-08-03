@@ -15,4 +15,11 @@ describe('MeritClaim schema contract', () => {
     expect(schema).toContain('@@unique([userId, difficulty, endlessFloor, bossWave])');
     expect(schema).toContain('@@index([userId, difficulty, bossWave])');
   });
+
+  it('stores per-run Boss checkpoints separately from permanent reward claims', () => {
+    expect(schema).toContain('model MeritRunCheckpoint');
+    expect(schema).toContain('lastBossWave Int');
+    expect(schema).toContain('lastFinishedAt DateTime');
+    expect(schema).toContain('@@unique([userId, runId])');
+  });
 });

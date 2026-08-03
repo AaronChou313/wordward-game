@@ -4,7 +4,7 @@
 
 This repository is a Three Kingdoms-themed Chinese character tower-defense game. It runs entirely in the browser with Vite, plain ES modules, and Canvas 2D. The current handoff branch is `feature/gameplay-overhaul`, based on `master`, and the remote is `git@github.com:AaronChou313/wordward-game.git`.
 
-The battle-core milestone and all six progression tasks (dual-pity gacha, differentiated items, advanced-character strategies, detailed codex panels, rotating shop stock, and full regression coverage) are implemented and independently reviewed. Online Tasks 1–2 (server/database scaffold and secure username sessions) are implemented; Tasks 3–7 remain. Do not assume the original 13-item request is complete until that plan is finished.
+The battle-core milestone, all six progression tasks, and Online Tasks 1–5 are implemented and independently reviewed. The online milestone now includes the API/database scaffold, secure sessions, profiles, resilient cloud saves, server-validated merit claims, and the global leaderboard. Online Tasks 6–7 (deployment/operations and the security release gate) remain; do not treat the milestone as released until both are complete.
 
 ## Technology and Commands
 
@@ -16,7 +16,7 @@ The battle-core milestone and all six progression tasks (dual-pity gacha, differ
 - Production build: `npm run build`
 - Preview build: `npm run preview`
 
-Latest verified result before this handoff: 17 test files, 158 tests passed across the client and API suites; Vite production build passed with 49 transformed modules; Prisma client generation/schema validation and `git diff --check` passed.
+Latest verified result before this handoff: 25 test files, 225 tests passed across the client and API suites; Vite production build passed with 56 transformed modules; Prisma schema validation and `git diff --check` passed.
 
 ## Repository Layout
 
@@ -223,6 +223,22 @@ The independent review deliberately interleaved concurrent saves, delayed GETs, 
 
 Verification passed the API suite (5 files / 24 tests) under Node 22.23.2, the combined root suite (21 files / 190 tests), Prisma validation, the Vite build (54 modules), and `git diff --check`. Automated client scenarios simulate both API outage recovery and explicit conflicts. Next implement Online Task 5 server-validated merit claims and the global leaderboard; never derive ranking totals from cloud-save JSON.
 
+## Completed: Online Task 5
+
+The focused commit subject is `feat: add validated merit leaderboard`. The implementation adds:
+
+- Authenticated, rate-limited `POST /api/merit/claims` that derives merit exclusively from difficulty and Boss wave. Client-supplied totals are schema-forbidden, while `(userId, difficulty, endlessFloor, bossWave)` remains the permanent reward idempotency key.
+- Conservative server validation for unlock order, supported Boss waves, actual configured spawn-count bounds, elapsed time, completion time, remaining Lord health, and sequential Boss evidence within one run.
+- A separate `MeritRunCheckpoint` model keyed by `(userId, runId)`. Permanent reward claims remain immutable while replay runs can establish their own wave-30 checkpoint and legitimately continue to wave 60; checkpoints bind difficulty, floor, seed, start time, latest completion time, and highest Boss wave.
+- Serializable claim transactions, unique-race recovery, and a second-transaction checkpoint repair path. Fault-injection tests simulate rollback when different runs race for the first reward and prove the losing run can still continue without double-awarding merit.
+- A user-scoped local claim queue that retries outages, does not cross accounts, preserves authentication failures, allows prerequisite claims to bypass temporarily progression-locked entries, and never lowers mature local merit from a smaller verified server total.
+- Anonymous cursor-based leaderboard pagination ordered by merit descending, attainment time ascending, and stable user ID. Cursors use a domain-separated HMAC rather than JWT, so they cannot authenticate protected endpoints; `/me` reports the authenticated user's global rank.
+- A Canvas ranking scene with pagination, avatar/nickname/merit rows, own-row highlighting, and loading/error/empty states. Boss deaths are submitted even when the equivalent local reward was already claimed, enabling server backfill for migrated/offline progress.
+
+Manual Canvas QA verified the home ranking entry, loading/error layout, and a clean browser console. Independent review found and resolved cursor/token confusion, weak battle bounds, queue ordering, local backfill, legal cross-run continuation, and concurrent checkpoint rollback. Final review reported no Critical or Important issues and Ready: Yes.
+
+Verification passed 25 test files / 225 tests, the Vite build transformed 56 modules, Prisma schema validation passed, and `git diff --check` passed. Remaining release-gate work is a real PostgreSQL Serializable concurrency scenario, a unified server retry policy for transient `P2034`, a retention policy for stale run checkpoints, and filtering/handling disabled accounts in public rankings. Next implement Online Task 6 deployment and operations.
+
 ## Verification and Manual QA
 
 Automated coverage is strong, and Task 2 received focused Canvas QA, but a full visual browser play-through has not been completed. Before release, manually verify:
@@ -267,7 +283,8 @@ Then read `AGENTS.md`, this file, the approved specs, and the next implementatio
 - Online Task 1 is commit `42fc7c9` (`feat: scaffold account api and database`).
 - Online Task 2 is commit `4963f5f` (`feat: add secure username authentication`).
 - Online Task 3 is commit `3486142` (`feat: add account and profile flows`).
-- Online Task 4 uses the focused commit subject `feat: add resilient cloud save sync`; use `git log` for its immutable hash after checkout.
+- Online Task 4 is commit `c57123c` (`feat: add resilient cloud save sync`).
+- Online Task 5 uses the focused commit subject `feat: add validated merit leaderboard`; use `git log` for its immutable hash after checkout.
 - After all online tasks and release verification are complete, the user has authorized pushing this branch, connecting with `ssh aaron-cloud`, pulling from GitHub, and deploying on the configured server. Inspect the existing remote services and deployment state before changing them; preserve unrelated workloads and document the exact production commands, backup, and rollback path here.
 - The `.superpowers/` execution ledger and agent reports are intentionally ignored and will not be available after cloning. The tracked specs, plans, tests, commits, and this handoff are the durable record.
 - No pull request was created during this handoff. Confirm the branch on GitHub after push before switching devices.

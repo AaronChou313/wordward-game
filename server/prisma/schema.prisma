@@ -30,6 +30,7 @@ model User {
   profile        Profile?
   gameSave       GameSave?
   meritClaims    MeritClaim[]
+  meritRuns      MeritRunCheckpoint[]
   refreshTokens  RefreshToken[]
 
   @@index([meritTotal(sort: Desc), meritReachedAt(sort: Asc)])
@@ -78,6 +79,24 @@ model MeritClaim {
   @@index([userId, runId])
   @@index([userId, createdAt])
   @@map("merit_claims")
+}
+
+model MeritRunCheckpoint {
+  id           String     @id @default(cuid())
+  userId       String     @map("user_id")
+  runId        String     @map("run_id") @db.VarChar(64)
+  difficulty   Difficulty
+  endlessFloor Int        @default(1) @map("endless_floor")
+  seed         String     @db.VarChar(128)
+  startedAt    DateTime   @map("started_at")
+  lastBossWave Int        @map("last_boss_wave")
+  lastFinishedAt DateTime @map("last_finished_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, runId])
+  @@index([userId, updatedAt])
+  @@map("merit_run_checkpoints")
 }
 
 model RefreshToken {

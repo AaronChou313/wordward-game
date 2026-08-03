@@ -2,6 +2,7 @@ import { Button } from '../ui/button.js';
 import { blurCanvasTextInput, focusCanvasTextInput } from '../ui/canvasTextInput.js';
 import { getCurrentUser, getProfile, logout, updateProfile } from '../net/apiClient.js';
 import { getSyncState, syncSave, uploadLocalSave, useCloudSave } from '../net/saveSync.js';
+import { flushMeritClaims } from '../net/meritClient.js';
 
 export class ProfileScene {
   constructor(scenes) {
@@ -16,7 +17,7 @@ export class ProfileScene {
     this.logoutButton = new Button(120, 1020, 510, 68, '退出登录', () => this.signOut(), { fontSize: 26 });
   }
 
-  enter() { this.lifecycle = {}; this.load(); this.syncCloud(); }
+  enter() { this.lifecycle = {}; this.load(); this.syncCloud(); flushMeritClaims(); }
   exit() { this.lifecycle = null; blurCanvasTextInput(); }
   update() { this.sync = getSyncState(); }
 

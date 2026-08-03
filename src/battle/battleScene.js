@@ -28,6 +28,7 @@ import { Audio } from '../core/audio.js';
 import { getSave, addGold, persist, grantEquip, equipByUid } from '../meta/saveData.js';
 import { recordCodexEncounter } from '../meta/codexDetails.js';
 import { refreshShopAfterBattle } from '../meta/shopStock.js';
+import { buildMeritClaim, queueMeritClaim } from '../net/meritClient.js';
 
 // 顶部按钮行
 const TOP_Y = 64, TOP_H = 56;
@@ -148,6 +149,9 @@ export class BattleScene {
     this.volumeDragging = false;
     this.selected = null;  // Tower 或 HeroGroup
     this.elapsed = 0;
+    this.runId = createRunId();
+    this.runSeed = createRunSeed();
+    this.runStartedAt = new Date();
     this.drag = null;      // { source:'slot'|'tower'|'active'|'shovel', index?, tower?, id?, char, kind, x, y, downX, downY, moved }
     this.pointer = { x: 0, y: 0 };
 
@@ -624,6 +628,19 @@ export class BattleScene {
   // Task 4 calls this only for an identified Boss; normal wave-30 enemies never grant merit.
   handleBossDefeated(wave) {
     const result = claimBossCompletion(getSave(), this.diff.id, wave, this.diff.floor);
+    if (this.runStartedAt && this.runId && this.runSeed && this.score) {
+      queueMeritClaim(buildMeritClaim({
+        difficulty: this.diff.id,
+        endlessFloor: this.diff.floor || 1,
+        bossWave: wave,
+        runId: this.runId,
+        seed: this.runSeed,
+        startedAt: this.runStartedAt,
+        finishedAt: new Date(),
+        kills: this.score.kills + 1,
+        lordHp: this.lordHp,
+      }));
+    }
     if (!result.claimed) return result;
 
     persist();
@@ -1166,4 +1183,20 @@ export class BattleScene {
     this.btnRetry.draw(ctx);
     this.btnHome.draw(ctx);
   }
+}
+
+function createRunId() {
+  if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
+  return `run-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function createRunSeed() {
+  if (globalThis.crypto && typeof globalThis.crypto.getRandomValues === 'function') {
+    const values = new Uint32Array(4);
+    globalThis.crypto.getRandomValues(values);
+    return Array.from(values, (value) => value.toString(16).padStart(8, '0')).join('');
+  }
+  return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }

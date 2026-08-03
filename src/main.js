@@ -14,6 +14,7 @@ import { Audio } from './core/audio.js';
 import { getSave } from './meta/saveData.js';
 import { AccountScene } from './meta/accountScene.js';
 import { ProfileScene } from './meta/profileScene.js';
+import { RankingScene } from './meta/rankingScene.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -27,6 +28,7 @@ scenes.register('equip', new EquipScene(scenes));
 scenes.register('codex', new CodexScene(scenes));
 scenes.register('account', new AccountScene(scenes));
 scenes.register('profile', new ProfileScene(scenes));
+scenes.register('ranking', new RankingScene(scenes));
 scenes.register('battle', new BattleScene(scenes));
 
 const view = setupInput(canvas, {

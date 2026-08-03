@@ -17,7 +17,8 @@ export class HomeScene {
       new Button(175, 940, 400, 76, '抽 奖', () => { Audio.click(); scenes.switch('gacha'); }, { fontSize: 34 }),
       new Button(175, 1030, 195, 76, '装 备', () => { Audio.click(); scenes.switch('equip'); }, { fontSize: 34 }),
       new Button(380, 1030, 195, 76, '图 鉴', () => { Audio.click(); scenes.switch('codex'); }, { fontSize: 34 }),
-      new Button(175, 1120, 400, 76, '账 号', () => { Audio.click(); scenes.switch('account'); }, { fontSize: 30 }),
+      new Button(175, 1120, 195, 76, '排 行', () => { Audio.click(); scenes.switch('ranking'); }, { fontSize: 30 }),
+      new Button(380, 1120, 195, 76, '账 号', () => { Audio.click(); scenes.switch('account'); }, { fontSize: 30 }),
     ];
   }
 
