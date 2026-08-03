@@ -1,0 +1,13 @@
+.git
+.superpowers
+.env
+.env.*
+!.env.example
+node_modules
+server/node_modules
+dist
+coverage
+backups
+deploy/certs
+*.log
+.DS_Store

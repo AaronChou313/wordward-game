@@ -60,4 +60,23 @@ describe('GET /api/health', () => {
     expect(response.body).not.toContain(VALID_ENV.JWT_ACCESS_SECRET);
     expect(response.body).not.toContain(VALID_ENV.DATABASE_URL);
   });
+
+  it('trusts forwarded client details only in the production proxy topology', async () => {
+    app = buildApp({
+      config: loadConfig({ ...VALID_ENV, NODE_ENV: 'production' }),
+      logger: false,
+    });
+    app.get('/proxy-probe', async (request) => ({ ip: request.ip, protocol: request.protocol }));
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/proxy-probe',
+      headers: {
+        'x-forwarded-for': '203.0.113.42',
+        'x-forwarded-proto': 'https',
+      },
+    });
+
+    expect(response.json()).toEqual({ ip: '203.0.113.42', protocol: 'https' });
+  });
 });

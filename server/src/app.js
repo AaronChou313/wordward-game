@@ -10,6 +10,15 @@ import { saveRoutes } from './modules/save/routes.js';
 import { meritRoutes } from './modules/merit/routes.js';
 import { leaderboardRoutes } from './modules/leaderboard/routes.js';
 
+const PRODUCTION_PROXY_CIDRS = [
+  '127.0.0.0/8',
+  '10.0.0.0/8',
+  '172.16.0.0/12',
+  '192.168.0.0/16',
+  '::1/128',
+  'fc00::/7',
+];
+
 export function buildApp(options = {}) {
   const config = options.config || loadConfig();
   const ownsPrisma = !options.prisma;
@@ -17,6 +26,7 @@ export function buildApp(options = {}) {
   const app = Fastify({
     logger: options.logger ?? config.nodeEnv !== 'test',
     bodyLimit: 1024 * 1024,
+    trustProxy: config.nodeEnv === 'production' ? PRODUCTION_PROXY_CIDRS : false,
   });
 
   app.decorate('config', config);

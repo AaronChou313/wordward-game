@@ -4,7 +4,7 @@
 
 This repository is a Three Kingdoms-themed Chinese character tower-defense game. It runs entirely in the browser with Vite, plain ES modules, and Canvas 2D. The current handoff branch is `feature/gameplay-overhaul`, based on `master`, and the remote is `git@github.com:AaronChou313/wordward-game.git`.
 
-The battle-core milestone, all six progression tasks, and Online Tasks 1–5 are implemented and independently reviewed. The online milestone now includes the API/database scaffold, secure sessions, profiles, resilient cloud saves, server-validated merit claims, and the global leaderboard. Online Tasks 6–7 (deployment/operations and the security release gate) remain; do not treat the milestone as released until both are complete.
+The battle-core milestone, all six progression tasks, and Online Tasks 1–6 are implemented and independently reviewed. The online milestone now includes the API/database scaffold, secure sessions, profiles, resilient cloud saves, server-validated merit claims, the global leaderboard, and a production container/operations stack. Online Task 7 (the security release gate) remains; do not treat the milestone as publicly released until it is complete.
 
 ## Technology and Commands
 
@@ -16,7 +16,7 @@ The battle-core milestone, all six progression tasks, and Online Tasks 1–5 are
 - Production build: `npm run build`
 - Preview build: `npm run preview`
 
-Latest verified result before this handoff: 25 test files, 225 tests passed across the client and API suites; Vite production build passed with 56 transformed modules; Prisma schema validation and `git diff --check` passed.
+Latest verified result before this handoff: 26 test files, 232 tests passed across the client and API suites; Vite production build passed with 56 transformed modules; Prisma schema validation, Compose config validation, the container smoke scenario, and `git diff --check` passed.
 
 ## Repository Layout
 
@@ -239,6 +239,26 @@ Manual Canvas QA verified the home ranking entry, loading/error layout, and a cl
 
 Verification passed 25 test files / 225 tests, the Vite build transformed 56 modules, Prisma schema validation passed, and `git diff --check` passed. Remaining release-gate work is a real PostgreSQL Serializable concurrency scenario, a unified server retry policy for transient `P2034`, a retention policy for stale run checkpoints, and filtering/handling disabled accounts in public rankings. Next implement Online Task 6 deployment and operations.
 
+## Completed: Online Task 6
+
+The focused commit subject is `chore: add production deployment stack`. The implementation adds:
+
+- Node.js 22 multi-stage frontend and API images. The final Nginx and API processes run as UID 101 and UID 1000 respectively; the API base installs CA certificates and OpenSSL so Prisma generation and runtime resolve the correct crypto library.
+- A PostgreSQL 16 / API / Web Compose stack with a persistent database volume, health-gated startup, automatic `prisma migrate deploy`, loopback-only default publishing, read-only application filesystems, temporary writable mounts, restart policies, and capped local Docker logs.
+- A generated baseline PostgreSQL migration covering all production tables, indexes, foreign keys, enums, and the per-run merit checkpoint model.
+- An unprivileged Nginx SPA server with `/api` proxying, a one-MiB body limit, long-lived hashed assets, CSP/frame/MIME/referrer/permissions headers, and forwarding that preserves an outer TLS terminator's exact `https` protocol.
+- Production Fastify proxy trust restricted to loopback, RFC1918, and ULA addresses. Forwarded protocol/IP behavior has a runtime regression so rate limiting observes the real client rather than the Web container.
+- Complete deployment documentation for DNS/TLS, environment secrets, migrations, sequential low-memory builds, daily `pg_dump`, disposable restore drills, log rotation, and application/database rollback.
+- A reusable `deploy/smoke.sh` that creates a temporary account and verifies health, registration, first cloud-save write, an idempotent server-validated Boss claim, and leaderboard publication without ever submitting an aggregate merit total.
+
+Local verification used a checksum-verified standalone Docker Compose v5.1.4 binary because Docker Desktop is not installed. Compose interpolation/config validation passed with the placeholder `.env.example` and no live secrets.
+
+The authorized `aaron-cloud` host was inspected before changes: it was an otherwise idle Ubuntu 22.04 server with about 890 MiB RAM, no swap, and no Docker. The official Docker repository was installed (Docker 29.7.1, Compose 5.3.1), a persistent 2 GiB `/swapfile` was added after backing up `/etc/fstab` to `/etc/fstab.wordward-predeploy`, and an isolated checkout was staged at `/root/wordward-smoke`. Parallel image construction overloaded the single small host, so it was stopped and the documented sequential Web/API build completed successfully. PostgreSQL, API, and Web then reached healthy status on loopback port 18080, non-root UIDs were confirmed, and the full smoke script passed.
+
+The loopback-only smoke stack and its test database are intentionally retained for Online Task 7's real PostgreSQL concurrency and backup/restore drills. They must be removed before the final clean production deployment. The server currently has no configured public hostname or TLS terminator; do not expose the Secure-cookie account flow over plain HTTP. Dependency audit findings printed during image construction also remain for Task 7 resolution.
+
+Verification passed 26 test files / 232 tests, the Vite build transformed 56 modules, Prisma validation passed, official Compose config validation passed, both images built, all three services were healthy, the five-step application smoke passed, and `git diff --check` passed. Next implement Online Task 7 security and release verification.
+
 ## Verification and Manual QA
 
 Automated coverage is strong, and Task 2 received focused Canvas QA, but a full visual browser play-through has not been completed. Before release, manually verify:
@@ -284,7 +304,8 @@ Then read `AGENTS.md`, this file, the approved specs, and the next implementatio
 - Online Task 2 is commit `4963f5f` (`feat: add secure username authentication`).
 - Online Task 3 is commit `3486142` (`feat: add account and profile flows`).
 - Online Task 4 is commit `c57123c` (`feat: add resilient cloud save sync`).
-- Online Task 5 uses the focused commit subject `feat: add validated merit leaderboard`; use `git log` for its immutable hash after checkout.
+- Online Task 5 is commit `02ab0a8` (`feat: add validated merit leaderboard`).
+- Online Task 6 uses the focused commit subject `chore: add production deployment stack`; use `git log` for its immutable hash after checkout.
 - After all online tasks and release verification are complete, the user has authorized pushing this branch, connecting with `ssh aaron-cloud`, pulling from GitHub, and deploying on the configured server. Inspect the existing remote services and deployment state before changing them; preserve unrelated workloads and document the exact production commands, backup, and rollback path here.
 - The `.superpowers/` execution ledger and agent reports are intentionally ignored and will not be available after cloning. The tracked specs, plans, tests, commits, and this handoff are the durable record.
 - No pull request was created during this handoff. Confirm the branch on GitHub after push before switching devices.

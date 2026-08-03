@@ -6,5 +6,7 @@ dist/
 .env.*
 !.env.example
 coverage/
+backups/
+deploy/certs/
 *.log
 .DS_Store
