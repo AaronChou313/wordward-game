@@ -15,6 +15,8 @@ export class Tower {
     this.kind = kind;
     this.heroName = heroName || null;
     this.cool = 0;
+    this.stunTimer = 0;
+    this.stunImmuneTimer = 0;
     this.buffs = {};       // 词组强化效果（每轮扫描重算）
     this.buffChars = [];   // 生效中的强化字（显示用）
     this.auraSpd = 0;      // 光环攻速（曹操等，每帧重算）
@@ -64,10 +66,20 @@ export class Tower {
     return leveled;
   }
 
+  applyStun(duration) {
+    if (this.stunTimer > 0 || this.stunImmuneTimer > 0) return false;
+    this.stunTimer = duration;
+    return true;
+  }
+
   // 返回击杀数；onKill(enemy, tower) 回调用于刷新栏加速等
   update(dt, ctx2) {
     const { enemies, effects, itemBuffs, onKill } = ctx2;
+    const stun = advanceStunTimers(this, dt);
+    this.stunTimer = stun.stunTimer;
+    this.stunImmuneTimer = stun.stunImmuneTimer;
     if (this.flash > 0) this.flash -= dt;
+    if (stun.stunned) return 0;
     if (this.inert) return 0;
     const wb = ctx2.unitGear ? ctx2.unitGear[this.char] : null;
     const s = this.stats(itemBuffs, wb);
@@ -223,8 +235,43 @@ export class Tower {
       ctx.font = '18px KaiTi, STKaiti, serif';
       ctx.fillText(this.buffChars.join(''), this.x, this.y - 44);
     }
+    this.renderStunStatus(ctx);
     ctx.restore();
   }
+
+  renderStunStatus(ctx) {
+    if (this.stunTimer <= 0) return;
+    ctx.save();
+    ctx.fillStyle = 'rgba(38, 55, 88, 0.82)';
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, 39, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#8ed8ff';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    ctx.fillStyle = '#e8f7ff';
+    ctx.font = 'bold 20px KaiTi, STKaiti, serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('晕 ' + this.stunTimer.toFixed(1), this.x, this.y);
+    ctx.restore();
+  }
+}
+
+export function advanceStunTimers(state, dt) {
+  if (state.stunTimer > 0) {
+    const stunTimer = Math.max(0, state.stunTimer - dt);
+    return {
+      stunTimer,
+      stunImmuneTimer: stunTimer === 0 ? 2 : state.stunImmuneTimer,
+      stunned: true,
+    };
+  }
+  return {
+    stunTimer: 0,
+    stunImmuneTimer: Math.max(0, state.stunImmuneTimer - dt),
+    stunned: false,
+  };
 }
 
 function dist(t, e) {

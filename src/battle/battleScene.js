@@ -1,6 +1,7 @@
 // 战斗场景：编排地图、刷怪、将士、英雄组、刷新栏、词组、道具、结算
 import { Grid } from './grid.js';
-import { Enemy } from './enemy.js';
+import { advanceSkillTimer, Enemy, selectStunTargets } from './enemy.js';
+import { spawnPlan } from './spawnPlan.js';
 import { Tower } from './tower.js';
 import { HeroGroup } from './heroGroup.js';
 import { RefreshBar } from './refreshBar.js';
@@ -104,6 +105,8 @@ export class BattleScene {
     this.waveState = 'rest';
     this.restTimer = FIRST_WAVE_DELAY;
     this.toSpawn = 0;
+    this.spawnQueue = [];
+    this.spawnIndex = 0;
     this.spawnTimer = 0;
     this.waveCfg = null;
 
@@ -513,6 +516,10 @@ export class BattleScene {
   }
 
   handleKill(enemy, tower) {
+    if (enemy.type === 'boss' && !enemy.bossDefeatHandled) {
+      enemy.bossDefeatHandled = true;
+      this.handleBossDefeated(this.wave);
+    }
     this.score.kills++;
     this.bar.onKill();
     // 装备掉落
@@ -576,18 +583,21 @@ export class BattleScene {
       if (this.restTimer <= 0) {
         this.wave++;
         this.waveCfg = waveConfig(this.wave, this.diff);
-        this.toSpawn = this.waveCfg.count;
+        this.spawnQueue = spawnPlan(this.wave, this.waveCfg);
+        this.spawnIndex = 0;
+        this.toSpawn = this.spawnQueue.length;
         this.spawnTimer = 0;
         this.waveState = 'wave';
         Toast.show('第 ' + this.wave + ' 波来袭！');
       }
     } else {
-      if (this.toSpawn > 0) {
+      if (this.spawnIndex < this.spawnQueue.length) {
         this.spawnTimer -= dt;
         if (this.spawnTimer <= 0) {
           this.spawnTimer = this.waveCfg.spawnInterval;
-          this.toSpawn--;
-          const e = new Enemy(this.waveCfg.hp, this.waveCfg.speed);
+          const descriptor = this.spawnQueue[this.spawnIndex++];
+          this.toSpawn = this.spawnQueue.length - this.spawnIndex;
+          const e = new Enemy(descriptor);
           const p = pointAt(0);
           e.x = p.x; e.y = p.y;
           this.enemies.push(e);
@@ -601,7 +611,9 @@ export class BattleScene {
 
     // 敌人
     for (const e of this.enemies) {
+      if (e.dead) continue;
       e.update(dt);
+      this.updateEnemySkill(e, dt);
       if (e.reached && !e.dead) {
         e.dead = true;
         this.lordHp--;
@@ -642,6 +654,37 @@ export class BattleScene {
     for (const g of this.heroGroups) g.update(dt, ctx2);
   }
 
+  updateEnemySkill(enemy, dt) {
+    if (!enemy.skill || enemy.dead || enemy.reached) return;
+    const next = advanceSkillTimer({
+      cooldown: enemy.skillCooldown,
+      telegraph: enemy.skillTelegraphTimer,
+    }, enemy.skill, dt);
+    enemy.skillCooldown = next.cooldown;
+    enemy.skillTelegraphTimer = next.telegraph;
+    if (!next.fired) return;
+
+    const combatTowers = this.towers
+      .filter((tower) => !tower.inert && !tower.group)
+      .concat(this.heroGroups.map((group) => group.puppet));
+    const targets = selectStunTargets(enemy, combatTowers, enemy.skill, (tower) => {
+      const gear = this.unitGear[tower.char];
+      const stats = tower.stats(this.itemBuffs, gear);
+      return stats ? stats.range : (tower.base ? tower.base.range : 0);
+    });
+    let applied = 0;
+    for (const tower of targets) {
+      if (!tower.applyStun(enemy.skill.duration)) continue;
+      applied++;
+      this.effects.ring(tower.x, tower.y, '#8ed8ff', 12, 220);
+      this.effects.damageText(tower.x, tower.y - 48, '眩晕!', '#8ed8ff', 25);
+    }
+    if (applied > 0) {
+      this.effects.shake(enemy.type === 'boss' ? 7 : 4, 0.16);
+      Audio.boom();
+    }
+  }
+
   gameOver() {
     if (this.over) return;
     this.over = true;
@@ -672,7 +715,10 @@ export class BattleScene {
 
     this.grid.render(ctx);
     this.grid.renderLord(ctx, this.lordHp, LORD_HP + Math.round(this.lordHpBonus));
-    for (const g of this.heroGroups) g.render(ctx);
+    for (const g of this.heroGroups) {
+      g.render(ctx);
+      g.puppet.renderStunStatus(ctx);
+    }
     for (const t of this.towers) {
       if (this.drag && this.drag.source === 'tower' && this.drag.tower === t && this.drag.moved) continue;
       t.render(ctx);
