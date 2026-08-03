@@ -2,7 +2,7 @@
 import { loadData, saveData } from '../core/storage.js';
 
 const DEFAULT_SAVE = {
-  version: 1,
+  version: 2,
   gold: 300,
   items: { owned: {}, equippedActive: [], equippedPassive: [] }, // owned: { itemId: level }
   unlockedChars: ['精', '铁', '赵', '云', '吕', '布'],
@@ -14,21 +14,54 @@ const DEFAULT_SAVE = {
   equipment: { owned: [], nextUid: 1, player: { '武器': null, '护甲': null, '饰品': null }, units: { '兵': null, '骑': null, '枪': null, '弓': null, '炮': null } },
   // 图鉴：各类已解锁 key
   codex: { base: [], prefix: [], hero: [] },
+  merit: { total: 0, claimed: {} },
+  gacha: { smallPity: 0, bigPity: 0 },
+  shop: { stock: [] },
 };
 
 let data = null;
 
+function isObject(value) {
+  return value != null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function copyDefault(value) {
+  if (Array.isArray(value)) return value.map(copyDefault);
+  if (!isObject(value)) return value;
+
+  return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, copyDefault(child)]));
+}
+
+function mergeDefaults(defaults, saved) {
+  const merged = {};
+  const source = isObject(saved) ? saved : {};
+
+  for (const [key, defaultValue] of Object.entries(defaults)) {
+    const savedValue = source[key];
+    if (isObject(defaultValue)) {
+      merged[key] = mergeDefaults(defaultValue, savedValue);
+    } else {
+      merged[key] = savedValue === undefined ? copyDefault(defaultValue) : savedValue;
+    }
+  }
+
+  for (const [key, savedValue] of Object.entries(source)) {
+    if (!(key in defaults)) merged[key] = savedValue;
+  }
+
+  return merged;
+}
+
+export function migrateSave(raw) {
+  const migrated = mergeDefaults(DEFAULT_SAVE, raw);
+  migrated.version = 2;
+  return migrated;
+}
+
 export function getSave() {
   if (!data) {
     const loaded = loadData('save', null);
-    data = Object.assign({}, DEFAULT_SAVE, loaded || {});
-    data.items = Object.assign({}, DEFAULT_SAVE.items, (loaded && loaded.items) || {});
-    data.settings = Object.assign({}, DEFAULT_SAVE.settings, (loaded && loaded.settings) || {});
-    data.diff = Object.assign({}, DEFAULT_SAVE.diff, (loaded && loaded.diff) || {});
-    data.equipment = Object.assign({}, DEFAULT_SAVE.equipment, (loaded && loaded.equipment) || {});
-    data.equipment.player = Object.assign({}, DEFAULT_SAVE.equipment.player, (loaded && loaded.equipment && loaded.equipment.player) || {});
-    data.equipment.units = Object.assign({}, DEFAULT_SAVE.equipment.units, (loaded && loaded.equipment && loaded.equipment.units) || {});
-    data.codex = Object.assign({}, DEFAULT_SAVE.codex, (loaded && loaded.codex) || {});
+    data = migrateSave(loaded);
   }
   return data;
 }
