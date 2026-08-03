@@ -1,0 +1,943 @@
+// 战斗场景：编排地图、刷怪、将士、英雄组、刷新栏、词组、道具、结算
+import { Grid } from './grid.js';
+import { Enemy } from './enemy.js';
+import { Tower } from './tower.js';
+import { HeroGroup } from './heroGroup.js';
+import { RefreshBar } from './refreshBar.js';
+import { rescan } from './wordSystem.js';
+import { canMerge, mergeInto } from './merge.js';
+import { Effects } from './effects.js';
+import { Score } from './score.js';
+import { pointAt } from './path.js';
+import { LORD_HP, WAVE_REST, FIRST_WAVE_DELAY, waveConfig } from '../config/waves.js';
+import { resolveDiff, DIFF_UNLOCK, ENDLESS_FLOOR_WAVE } from '../config/difficulty.js';
+import { pointToCell, cellCenter, CELL } from '../config/map.js';
+import { BASE_UNITS, ADV_CHARS } from '../config/units.js';
+import { HEROES, PREFIX_BUFFS, HERO_NAMES } from '../config/words.js';
+import { ITEMS } from '../config/items.js';
+import { EQUIP, equipStats, dropChance, rollRarity, rollEquipId, rarityById } from '../config/equipment.js';
+import { CODEX_SET_BONUS, codexCat } from '../config/codex.js';
+import { Button, roundRect } from '../ui/button.js';
+import { drawPanel } from '../ui/panel.js';
+import { Toast } from '../ui/toast.js';
+import { Audio } from '../core/audio.js';
+import { getSave, addGold, persist, grantEquip, equipByUid } from '../meta/saveData.js';
+
+// 顶部按钮行
+const TOP_Y = 64, TOP_H = 56;
+const ACT_W = 132, ACT_GAP = 8, ACT_X = 39;
+// 刷新栏布局
+const SLOT_Y = 1178, SLOT_H = 92, SLOT_W = 120, SLOT_GAP = 8, SLOT_X = 39;
+const BTN_Y = 1276, BTN_H = 52;
+// 拖拽判定阈值（小于此位移视为点选）
+const TAP_DIST = 14;
+// 设置面板音量滑条
+const SLIDER_X = 215, SLIDER_W = 320, SLIDER_Y = 600;
+
+export class BattleScene {
+  constructor(scenes) {
+    this.scenes = scenes;
+  }
+
+  enter() {
+    const save = getSave();
+    this.diff = resolveDiff(save.diff.selected);
+    this.grid = new Grid();
+    this.towers = [];
+    this.heroGroups = [];
+    this.enemies = [];
+    this.effects = new Effects();
+    this.score = new Score();
+    this.paused = false;
+    this.speed = 1;
+    this.over = false;
+    this.shovelMode = false;
+    this.settingsOpen = false;
+    this.volumeDragging = false;
+    this.selected = null;  // Tower 或 HeroGroup
+    this.elapsed = 0;
+    this.unlockedMsgs = [];
+    this.drag = null;      // { source:'slot'|'tower'|'active', index?, tower?, id?, char, kind, x, y, downX, downY, moved }
+    this.pointer = { x: 0, y: 0 };
+
+    // 被动道具加成
+    this.itemBuffs = { atk: 0, spd: 0, coin: 0 };
+    for (const eq of save.items.equippedPassive) {
+      const item = ITEMS[eq.id];
+      if (!item || !item.buffs) continue;
+      const b = item.buffs(eq.level);
+      for (const k in b) this.itemBuffs[k] = (this.itemBuffs[k] || 0) + b[k];
+    }
+
+    // 玩家装备加成（全军/主公）
+    this.lordHpBonus = 0;
+    for (const slot in save.equipment.player) {
+      const inst = equipByUid(save.equipment.player[slot]);
+      if (!inst) continue;
+      const s = equipStats(inst);
+      for (const k in s) {
+        if (k === 'lordHp') this.lordHpBonus += s[k];
+        else this.itemBuffs[k] = (this.itemBuffs[k] || 0) + s[k];
+      }
+    }
+    this.lordHp = LORD_HP + Math.round(this.lordHpBonus);
+
+    // 将士武器（按兵种）
+    this.unitGear = {};
+    for (const char in save.equipment.units) {
+      const inst = equipByUid(save.equipment.units[char]);
+      if (inst) this.unitGear[char] = equipStats(inst);
+    }
+
+    // 主动道具
+    this.actives = save.items.equippedActive.map((eq) => ({ id: eq.id, level: eq.level, cd: 0 }));
+
+    // 刷新栏
+    this.bar = new RefreshBar(save.unlockedChars, this.diff);
+    this.bar.initialFill();
+
+    // 波次状态（开局留准备时间）
+    this.wave = 0;
+    this.waveState = 'rest';
+    this.restTimer = FIRST_WAVE_DELAY;
+    this.toSpawn = 0;
+    this.spawnTimer = 0;
+    this.waveCfg = null;
+
+    // 按钮
+    this.btnSpeed = new Button(467, TOP_Y, 80, TOP_H, 'x1', () => {
+      this.speed = this.speed === 1 ? 2 : 1;
+      this.btnSpeed.label = 'x' + this.speed;
+      Audio.click();
+    }, { fontSize: 26 });
+    this.btnPause = new Button(555, TOP_Y, 80, TOP_H, '停', () => {
+      this.paused = !this.paused;
+      this.btnPause.label = this.paused ? '续' : '停';
+      Audio.click();
+    }, { fontSize: 26 });
+    this.btnGear = new Button(643, TOP_Y, 72, TOP_H, '⚙', () => {
+      this.settingsOpen = true;
+      Audio.click();
+    }, { fontSize: 26 });
+    this.btnRefresh = new Button(SLOT_X, BTN_Y, 470, BTN_H, '刷新', () => this.tryRefresh(), { fontSize: 26 });
+    this.btnShovel = new Button(521, BTN_Y, 211, BTN_H, '铲子', () => {
+      if (this.bar.shovels > 0) {
+        this.shovelMode = !this.shovelMode;
+        Audio.click();
+      }
+    }, { fontSize: 26 });
+
+    // 结算面板按钮
+    this.btnRetry = new Button(175, 830, 400, 70, '再来一局', () => { Audio.click(); this.scenes.switch('battle'); });
+    this.btnHome = new Button(175, 920, 400, 70, '返回主页', () => { Audio.click(); this.scenes.switch('home'); });
+
+    // 设置面板按钮
+    this.btnResume = new Button(175, 700, 400, 70, '继续战斗', () => {
+      Audio.click();
+      this.settingsOpen = false;
+    });
+    this.btnExit = new Button(175, 790, 400, 70, '退出战斗', () => {
+      Audio.click();
+      this.settingsOpen = false;
+      this.gameOver();
+    });
+  }
+
+  tryRefresh() {
+    if (this.bar.refresh()) {
+      Audio.click();
+      if (this.bar.sinceShovel === 0) Toast.show('获得铲子！点铲子按钮激活新格子');
+    }
+  }
+
+  activeAt(x, y) {
+    if (y < TOP_Y || y > TOP_Y + TOP_H) return -1;
+    for (let i = 0; i < this.actives.length; i++) {
+      const bx = ACT_X + i * (ACT_W + ACT_GAP);
+      if (x >= bx && x <= bx + ACT_W) return i;
+    }
+    return -1;
+  }
+
+  onSlider(x, y) {
+    return x >= SLIDER_X - 20 && x <= SLIDER_X + SLIDER_W + 20 && y >= SLIDER_Y - 24 && y <= SLIDER_Y + 24;
+  }
+
+  setVolumeFromX(x) {
+    const v = Math.max(0, Math.min(1, (x - SLIDER_X) / SLIDER_W));
+    Audio.setVolume(v);
+    getSave().settings.volume = Math.round(v * 100);
+  }
+
+  // ---------- 输入 ----------
+  onPointerDown(x, y) {
+    this.pointer = { x, y };
+    if (this.over) {
+      if (this.btnRetry.hitTest(x, y)) this.btnRetry.onClick();
+      else if (this.btnHome.hitTest(x, y)) this.btnHome.onClick();
+      return;
+    }
+    if (this.settingsOpen) {
+      if (this.btnResume.hitTest(x, y)) return this.btnResume.onClick();
+      if (this.btnExit.hitTest(x, y)) return this.btnExit.onClick();
+      if (this.onSlider(x, y)) {
+        this.volumeDragging = true;
+        this.setVolumeFromX(x);
+      }
+      return;
+    }
+    if (this.btnSpeed.hitTest(x, y)) return this.btnSpeed.onClick();
+    if (this.btnPause.hitTest(x, y)) return this.btnPause.onClick();
+    if (this.btnGear.hitTest(x, y)) return this.btnGear.onClick();
+    if (this.btnRefresh.hitTest(x, y)) return this.tryRefresh();
+    if (this.btnShovel.hitTest(x, y)) return this.btnShovel.onClick();
+
+    // 主动道具：非指向型点击即用，指向型（练兵符）按下开始拖拽
+    const ai = this.activeAt(x, y);
+    if (ai >= 0) {
+      const a = this.actives[ai];
+      const item = ITEMS[a.id];
+      if (a.cd > 0) return Toast.show(item.name + ' 冷却中');
+      if (!item.targeted) return this.useActive(ai);
+      this.drag = { source: 'active', index: ai, id: a.id, x, y, downX: x, downY: y, moved: false };
+      return;
+    }
+
+    // 铲子模式：点未激活格子
+    const cellPos = pointToCell(x, y);
+    if (this.shovelMode) {
+      if (cellPos) {
+        const cell = this.grid.get(cellPos.c, cellPos.r);
+        if (cell && cell.kind === 'slot' && !cell.active && this.bar.shovels > 0) {
+          this.grid.activate(cellPos.c, cellPos.r);
+          this.bar.shovels--;
+          if (this.bar.shovels === 0) this.shovelMode = false;
+          this.effects.ring(x, y, '#c9a86a', 14, 240);
+          Audio.place();
+          Toast.show('格子已激活');
+        }
+      }
+      return;
+    }
+
+    // 从刷新栏拖起
+    const slotIdx = this.slotAt(x, y);
+    if (slotIdx >= 0 && this.bar.slots[slotIdx]) {
+      const item = this.bar.slots[slotIdx];
+      this.drag = { source: 'slot', index: slotIdx, char: item.char, kind: item.kind, x, y, downX: x, downY: y, moved: false };
+      return;
+    }
+
+    // 拖起/点选已放置的将士
+    if (cellPos) {
+      const cell = this.grid.get(cellPos.c, cellPos.r);
+      if (cell && cell.tower) {
+        this.drag = { source: 'tower', tower: cell.tower, char: cell.tower.char, kind: cell.tower.kind, x, y, downX: x, downY: y, moved: false };
+        return;
+      }
+    }
+
+    // 点空白：取消选中
+    this.selected = null;
+  }
+
+  onPointerMove(x, y) {
+    this.pointer = { x, y };
+    if (this.volumeDragging) {
+      this.setVolumeFromX(x);
+      return;
+    }
+    if (this.drag) {
+      this.drag.x = x;
+      this.drag.y = y;
+      if (!this.drag.moved && Math.hypot(x - this.drag.downX, y - this.drag.downY) > TAP_DIST) {
+        this.drag.moved = true;
+      }
+    }
+  }
+
+  onPointerUp(x, y) {
+    this.pointer = { x, y };
+    if (this.volumeDragging) {
+      this.volumeDragging = false;
+      persist();
+      return;
+    }
+    if (!this.drag || this.settingsOpen) { this.drag = null; return; }
+    const drag = this.drag;
+    this.drag = null;
+
+    // 点选（位移小于阈值）
+    if (!drag.moved) {
+      if (drag.source === 'tower') {
+        const target = drag.tower.group || drag.tower;
+        this.selected = this.selected === target ? null : target;
+        Audio.click();
+      } else if (drag.source === 'active') {
+        Toast.show('拖到将士身上使用');
+      }
+      return;
+    }
+
+    this.selected = null;
+    const slotIdx = this.slotAt(x, y);
+    const cellPos = pointToCell(x, y);
+
+    if (drag.source === 'active') {
+      // 练兵符：落在任意将士上升 1 阶
+      if (cellPos) {
+        const cell = this.grid.get(cellPos.c, cellPos.r);
+        if (cell && cell.tower) {
+          const a = this.actives[drag.index];
+          const item = ITEMS[a.id];
+          cell.tower.tier++;
+          cell.tower.cool = 0;
+          a.cd = item.cooldownAt ? item.cooldownAt(a.level) : (item.cooldown || 20);
+          Audio.merge();
+          this.effects.ring(cell.tower.x, cell.tower.y, '#7fe08a', 16, 280);
+          this.effects.damageText(cell.tower.x, cell.tower.y - 56, cell.tower.tier + ' 阶!', '#7fe08a', 30);
+          Toast.show(item.name + '：' + cell.tower.char + ' 升至 ' + cell.tower.tier + ' 阶');
+          this.afterBoardChange();
+        }
+      }
+      return;
+    }
+
+    if (drag.source === 'slot') {
+      // 拖到另一个槽位：交换槽位内容
+      if (slotIdx >= 0) {
+        if (slotIdx !== drag.index) {
+          const tmp = this.bar.slots[slotIdx];
+          this.bar.slots[slotIdx] = this.bar.slots[drag.index];
+          this.bar.slots[drag.index] = tmp;
+          Audio.click();
+        }
+        return;
+      }
+      if (!cellPos) return;
+      const cell = this.grid.get(cellPos.c, cellPos.r);
+      if (!cell || cell.kind !== 'slot' || !cell.active) return;
+      const item = this.bar.slots[drag.index];
+      if (!item) return;
+      if (cell.tower) {
+        // 可合成优先，否则与格上塔交换（塔收回栏位，字部署上格）
+        if (canMerge(cell.tower, item)) {
+          this.mergeWithBar(cell.tower, drag);
+        } else {
+          const t = cell.tower;
+          this.bar.slots[drag.index] = { char: t.char, kind: t.kind, tier: t.tier, level: t.level, xp: t.xp };
+          this.removeTower(t);
+          this.deploy(item, cellPos.c, cellPos.r);
+          Audio.place();
+          this.afterBoardChange();
+        }
+        return;
+      }
+      this.bar.take(drag.index);
+      this.deploy(item, cellPos.c, cellPos.r);
+      Audio.place();
+      this.afterBoardChange();
+      return;
+    }
+
+    // 拖动场上的将士
+    const src = drag.tower;
+    if (slotIdx >= 0) {
+      // 拖回将士栏：空位收回，有字则互换
+      const item = this.bar.slots[slotIdx];
+      if (!item) {
+        this.bar.slots[slotIdx] = { char: src.char, kind: src.kind, tier: src.tier, level: src.level, xp: src.xp };
+        this.removeTower(src);
+        Audio.place();
+        this.afterBoardChange();
+      } else {
+        const oc = src.c, or = src.r;
+        this.bar.slots[slotIdx] = { char: src.char, kind: src.kind, tier: src.tier, level: src.level, xp: src.xp };
+        this.removeTower(src);
+        this.deploy(item, oc, or);
+        Audio.place();
+        this.afterBoardChange();
+      }
+      return;
+    }
+    if (!cellPos) return;
+    const cell = this.grid.get(cellPos.c, cellPos.r);
+    if (!cell || cell.kind !== 'slot') return;
+    if (cell.tower === src) return;
+    if (cell.tower) {
+      if (canMerge(cell.tower, src)) {
+        mergeInto(cell.tower, src);
+        this.removeTower(src);
+        Audio.merge();
+        this.effects.ring(cell.tower.x, cell.tower.y, '#ffd75a', 16, 280);
+        this.effects.damageText(cell.tower.x, cell.tower.y - 56, cell.tower.tier + ' 阶!', '#ffd75a', 30);
+        this.afterBoardChange();
+      } else {
+        // 互换位置
+        const dst = cell.tower;
+        const oc = src.c, or = src.r;
+        const srcCell = this.grid.get(oc, or);
+        src.c = dst.c; src.r = dst.r;
+        dst.c = oc; dst.r = or;
+        let p = cellCenter(src.c, src.r);
+        src.x = p.x; src.y = p.y;
+        p = cellCenter(dst.c, dst.r);
+        dst.x = p.x; dst.y = p.y;
+        cell.tower = src;
+        if (srcCell) srcCell.tower = dst;
+        Audio.place();
+        this.afterBoardChange();
+      }
+      return;
+    }
+    if (!cell.active) return;
+    // 移动到空格
+    const oldCell = this.grid.get(src.c, src.r);
+    if (oldCell) oldCell.tower = null;
+    src.c = cellPos.c; src.r = cellPos.r;
+    const pos = cellCenter(cellPos.c, cellPos.r);
+    src.x = pos.x; src.y = pos.y;
+    cell.tower = src;
+    Audio.place();
+    this.afterBoardChange();
+  }
+
+  // 把将士栏的字部署到格子（保留阶/级/经验）
+  deploy(item, c, r) {
+    const tower = new Tower(item.char, item.tier || 1, c, r, item.kind);
+    tower.level = item.level || 1;
+    tower.xp = item.xp || 0;
+    this.grid.get(c, r).tower = tower;
+    this.towers.push(tower);
+    this.effects.ring(tower.x, tower.y, '#c9a86a', 10, 200);
+    // 图鉴：摆放普通/增益文字即解锁
+    if (item.kind === 'base') this.unlockCodex('base', item.char);
+    else if (PREFIX_BUFFS[item.char]) this.unlockCodex('prefix', item.char);
+    return tower;
+  }
+
+  // 图鉴解锁：发金币奖励，集齐一类发额外奖励
+  unlockCodex(catId, key) {
+    const save = getSave();
+    const list = save.codex[catId];
+    if (!list || list.includes(key)) return;
+    list.push(key);
+    const cat = codexCat(catId);
+    addGold(cat.reward);
+    Toast.show('图鉴解锁「' + key + '」 +' + cat.reward + ' 金');
+    if (cat.keys.every((k) => list.includes(k))) {
+      addGold(CODEX_SET_BONUS[catId]);
+      Toast.show('集齐' + cat.name + '！ +' + CODEX_SET_BONUS[catId] + ' 金');
+    }
+  }
+
+  mergeWithBar(tower, drag) {
+    // 刷新栏的字与场上将士合成（同字同阶）
+    const item = this.bar.slots[drag.index];
+    this.bar.take(drag.index);
+    tower.tier++;
+    if (item && item.level > tower.level) {
+      tower.level = item.level;
+      tower.xp = item.xp;
+    }
+    tower.cool = 0;
+    Audio.merge();
+    this.effects.ring(tower.x, tower.y, '#ffd75a', 16, 280);
+    this.effects.damageText(tower.x, tower.y - 56, tower.tier + ' 阶!', '#ffd75a', 30);
+    this.afterBoardChange();
+  }
+
+  removeTower(t) {
+    const cell = this.grid.get(t.c, t.r);
+    if (cell && cell.tower === t) cell.tower = null;
+    const idx = this.towers.indexOf(t);
+    if (idx >= 0) this.towers.splice(idx, 1);
+  }
+
+  afterBoardChange() {
+    const formed = rescan(this.grid, this.towers, this.heroGroups, this.effects);
+    for (const g of formed) {
+      Toast.show(g.name + ' 降临战场！');
+      this.unlockCodex('hero', g.name);
+    }
+  }
+
+  slotAt(x, y) {
+    if (y < SLOT_Y || y > SLOT_Y + SLOT_H) return -1;
+    for (let i = 0; i < 5; i++) {
+      const sx = SLOT_X + i * (SLOT_W + SLOT_GAP);
+      if (x >= sx && x <= sx + SLOT_W) return i;
+    }
+    return -1;
+  }
+
+  useActive(i) {
+    const a = this.actives[i];
+    if (a.cd > 0) return;
+    const item = ITEMS[a.id];
+    Audio.click();
+    if (a.id === 'fire') {
+      const { damage } = item.effect(a.level);
+      for (const e of this.enemies) {
+        if (e.dead) continue;
+        this.effects.tracer(e.x, e.y - 80, e.x, e.y, '#ff7a3a');
+        if (e.takeDamage(damage)) this.handleKill(e, null);
+      }
+      this.effects.shake(8, 0.25);
+      Audio.boom();
+      Toast.show('烈火符：全屏灼烧！');
+    } else if (a.id === 'recruit') {
+      this.bar.refresh(true);
+      Toast.show('募兵令：将士栏已刷新');
+    }
+    a.cd = item.cooldownAt ? item.cooldownAt(a.level) : (item.cooldown || 20);
+  }
+
+  handleKill(enemy, tower) {
+    this.score.kills++;
+    this.bar.onKill();
+    // 装备掉落
+    if (Math.random() < dropChance(this.wave, this.diff.dropMul)) {
+      const { inst, merged } = grantEquip(rollEquipId(), rollRarity(this.wave, this.diff.dropMul));
+      const def = EQUIP[inst.id];
+      const r = rarityById(inst.rarity);
+      Toast.show(merged
+        ? def.name + '·' + r.name + ' 合成升至 Lv' + inst.lvl
+        : '掉落 ' + def.name + '·' + r.name + '！');
+      Audio.coin();
+    }
+    if (!tower) return;
+    // 英雄组的击杀：经验分给每个成员字
+    const group = this.heroGroups.find((g) => g.puppet === tower);
+    if (group) {
+      for (const m of group.members) {
+        if (m.gainXp(5)) this.effects.damageText(m.x, m.y - 50, '升级!', '#7fe08a', 26);
+      }
+      return;
+    }
+    if (tower.gainXp && tower.gainXp(5)) {
+      this.effects.damageText(tower.x, tower.y - 50, '升级!', '#7fe08a', 26);
+    }
+  }
+
+  // ---------- 更新 ----------
+  update(dt) {
+    this.effects.update(dt);
+    Toast.update(dt);
+    if (this.over || this.paused || this.settingsOpen) return;
+    dt *= this.speed;
+    this.elapsed += dt;
+
+    // 主动道具冷却
+    for (const a of this.actives) if (a.cd > 0) a.cd -= dt;
+
+    // 刷新栏
+    this.bar.wave = this.wave;
+    this.bar.update(dt);
+
+    // 波次推进
+    if (this.waveState === 'rest') {
+      this.restTimer -= dt;
+      if (this.restTimer <= 0) {
+        this.wave++;
+        this.waveCfg = waveConfig(this.wave, this.diff);
+        this.toSpawn = this.waveCfg.count;
+        this.spawnTimer = 0;
+        this.waveState = 'wave';
+        Toast.show('第 ' + this.wave + ' 波来袭！');
+      }
+    } else {
+      if (this.toSpawn > 0) {
+        this.spawnTimer -= dt;
+        if (this.spawnTimer <= 0) {
+          this.spawnTimer = this.waveCfg.spawnInterval;
+          this.toSpawn--;
+          const e = new Enemy(this.waveCfg.hp, this.waveCfg.speed);
+          const p = pointAt(0);
+          e.x = p.x; e.y = p.y;
+          this.enemies.push(e);
+        }
+      } else if (this.enemies.length === 0) {
+        this.score.wave = this.wave;
+        this.waveState = 'rest';
+        this.restTimer = WAVE_REST;
+      }
+    }
+
+    // 敌人
+    for (const e of this.enemies) {
+      e.update(dt);
+      if (e.reached && !e.dead) {
+        e.dead = true;
+        this.lordHp--;
+        this.effects.shake(7, 0.2);
+        this.effects.damageText(e.x, e.y - 40, '-1', '#ff5a4a', 34);
+        Audio.hurt();
+        if (this.lordHp <= 0) this.gameOver();
+      }
+    }
+    this.enemies = this.enemies.filter((e) => !e.dead);
+
+    // 曹操光环：将士与英雄组都受益
+    for (const t of this.towers) t.auraSpd = 0;
+    for (const g of this.heroGroups) g.puppet.auraSpd = 0;
+    for (const g of this.heroGroups) {
+      if (g.name !== '曹操') continue;
+      for (const o of this.towers) {
+        if (!o.inert && Math.hypot(o.x - g.x, o.y - g.y) <= 3 * CELL) {
+          o.auraSpd = Math.max(o.auraSpd, 0.15);
+        }
+      }
+      for (const o of this.heroGroups) {
+        if (o !== g && Math.hypot(o.x - g.x, o.y - g.y) <= 3 * CELL) {
+          o.puppet.auraSpd = Math.max(o.puppet.auraSpd, 0.15);
+        }
+      }
+    }
+
+    // 将士与英雄组
+    const ctx2 = {
+      enemies: this.enemies,
+      effects: this.effects,
+      itemBuffs: this.itemBuffs,
+      unitGear: this.unitGear,
+      onKill: (e, tower) => this.handleKill(e, tower),
+    };
+    for (const t of this.towers) t.update(dt, ctx2);
+    for (const g of this.heroGroups) g.update(dt, ctx2);
+  }
+
+  gameOver() {
+    if (this.over) return;
+    this.over = true;
+    const coins = Math.round(this.score.coins(this.itemBuffs.coin) * this.diff.coinMul);
+    this.earnedCoins = coins;
+    addGold(coins);
+    const save = getSave();
+    if (this.score.wave > save.bestWave) {
+      save.bestWave = this.score.wave;
+    }
+    // 难度最佳纪录与解锁
+    const bestKey = this.diff.id === 'endless' ? 'endless' + this.diff.floor : this.diff.id;
+    if (this.score.wave > (save.diff.best[bestKey] || 0)) {
+      save.diff.best[bestKey] = this.score.wave;
+    }
+    for (const u of DIFF_UNLOCK) {
+      if (save.diff.unlocked.includes(u.id)) continue;
+      if ((save.diff.best[u.need.id] || 0) >= u.need.wave) {
+        save.diff.unlocked.push(u.id);
+        const name = u.id === 'endless' ? '无尽模式' : u.id === 'normal' ? '普通' : '困难';
+        this.unlockedMsgs.push('解锁新难度：' + name + '！');
+      }
+    }
+    // 无尽：达标解锁下一层
+    if (this.diff.id === 'endless' && this.diff.floor === save.diff.endlessFloor && this.score.wave >= ENDLESS_FLOOR_WAVE) {
+      save.diff.endlessFloor++;
+      this.unlockedMsgs.push('无尽·' + save.diff.endlessFloor + '层 已解锁！');
+    }
+    persist();
+  }
+
+  // ---------- 渲染 ----------
+  render(ctx) {
+    // 背景
+    ctx.fillStyle = '#181209';
+    ctx.fillRect(0, 0, 750, 1334);
+
+    const shake = this.effects.getShakeOffset();
+    ctx.save();
+    ctx.translate(shake.x, shake.y);
+
+    this.grid.render(ctx);
+    this.grid.renderLord(ctx, this.lordHp, LORD_HP + Math.round(this.lordHpBonus));
+    for (const g of this.heroGroups) g.render(ctx);
+    for (const t of this.towers) {
+      if (this.drag && this.drag.source === 'tower' && this.drag.tower === t && this.drag.moved) continue;
+      t.render(ctx);
+    }
+    for (const e of this.enemies) e.render(ctx);
+    this.renderSelection(ctx);
+    this.effects.render(ctx);
+    ctx.restore();
+
+    this.renderHud(ctx);
+    this.renderBar(ctx);
+
+    // 波次倒计时（置顶，避免遮挡详情面板）
+    if (!this.over && this.waveState === 'rest') {
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor = '#000';
+      ctx.shadowBlur = 10;
+      ctx.fillStyle = '#ffd75a';
+      ctx.font = 'bold 38px KaiTi, STKaiti, serif';
+      const msg = this.wave === 0
+        ? '战斗将于 ' + Math.ceil(this.restTimer) + 's 后开始'
+        : '下一波 ' + Math.ceil(this.restTimer) + 's';
+      ctx.fillText(msg, 375, 152);
+      ctx.restore();
+    }
+
+    // 拖拽中的字/道具
+    if (this.drag && this.drag.moved) {
+      ctx.save();
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = 'rgba(50, 38, 24, 0.9)';
+      ctx.beginPath();
+      ctx.arc(this.drag.x, this.drag.y, 40, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#ffd75a';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      if (this.drag.source === 'active') {
+        ctx.fillStyle = '#f0c8e0';
+        ctx.font = 'bold 24px KaiTi, STKaiti, serif';
+        ctx.fillText(ITEMS[this.drag.id].name, this.drag.x, this.drag.y + 2);
+      } else {
+        const style = this.drag.kind === 'base' ? BASE_UNITS[this.drag.char] : ADV_CHARS[this.drag.char];
+        ctx.fillStyle = (style && style.color) || '#e8c35a';
+        ctx.font = 'bold 46px KaiTi, STKaiti, serif';
+        ctx.fillText(this.drag.char, this.drag.x, this.drag.y + 2);
+      }
+      ctx.restore();
+    }
+
+    if (this.settingsOpen) this.renderSettings(ctx);
+    if (this.over) this.renderOver(ctx);
+    Toast.render(ctx);
+  }
+
+  // 选中将士/英雄组：射程圈 + 详情面板
+  renderSelection(ctx) {
+    if (!this.selected) return;
+    const isGroup = this.selected instanceof HeroGroup;
+    const puppet = isGroup ? this.selected.puppet : this.selected;
+    const s = puppet.stats(this.itemBuffs, this.unitGear[puppet.char]);
+
+    // 进阶字（未组词）：显示增益作用或可组词组
+    if (!s) {
+      drawPanel(ctx, 95, 460, 560, 300, puppet.char + '（进阶字）');
+      ctx.save();
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#f0d8a8';
+      ctx.font = '26px KaiTi, STKaiti, serif';
+      let ly = 560;
+      ctx.fillText('阶数 ' + puppet.tier + ' · Lv' + puppet.level, 135, ly);
+      ly += 44;
+      const buff = PREFIX_BUFFS[puppet.char];
+      if (buff) {
+        ctx.fillStyle = '#a8d8a0';
+        ctx.fillText('增益：与基础兵相邻时 ' + buff.label, 135, ly);
+        ly += 44;
+      }
+      const combos = HERO_NAMES.filter((n) => n.includes(puppet.char));
+      if (combos.length > 0) {
+        ctx.fillStyle = '#e8c35a';
+        ctx.fillText('可组词组：' + combos.join('、'), 135, ly);
+        ly += 44;
+      }
+      ctx.fillStyle = '#a8895a';
+      ctx.font = '22px KaiTi, STKaiti, serif';
+      ctx.fillText('与其他字相邻组成词组后激活', 135, ly);
+      ctx.restore();
+      return;
+    }
+
+    // 射程圈
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 215, 90, 0.8)';
+    ctx.fillStyle = 'rgba(255, 215, 90, 0.08)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(puppet.x, puppet.y, s.range * CELL, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    // 详情面板
+    const title = isGroup ? this.selected.name : (puppet.kind === 'adv' ? puppet.char + '（进阶字）' : puppet.char);
+    drawPanel(ctx, 95, 460, 560, 330, title);
+    ctx.save();
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#f0d8a8';
+    ctx.font = '26px KaiTi, STKaiti, serif';
+    const lines = isGroup
+      ? ['阶数 ' + puppet.tier + ' · Lv' + puppet.level + '（成员均值）',
+         '攻击 ' + Math.round(s.atk) + ' · 攻速 ' + (1 / s.interval).toFixed(2) + '/s · 射程 ' + s.range.toFixed(1)]
+      : ['阶数 ' + puppet.tier + ' · Lv' + puppet.level + '（经验 ' + Math.floor(puppet.xp) + '）',
+         '攻击 ' + Math.round(s.atk) + ' · 攻速 ' + (1 / s.interval).toFixed(2) + '/s · 射程 ' + s.range.toFixed(1)];
+    if (!isGroup && puppet.buffChars.length > 0) lines.push('词组强化：' + puppet.buffChars.join(' '));
+    if (isGroup) lines.push('成员：' + this.selected.members.map((m) => m.char + m.tier + '阶').join(' '));
+    const desc = isGroup ? (HEROES[this.selected.name] || {}).desc : (puppet.base || {}).desc;
+    if (desc) lines.push(desc);
+    lines.forEach((line, i) => ctx.fillText(line, 135, 560 + i * 44));
+    ctx.restore();
+  }
+
+  renderHud(ctx) {
+    ctx.save();
+    ctx.font = '24px KaiTi, STKaiti, serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#c9a8ff';
+    ctx.fillText(this.diff.name, 39, 34);
+    ctx.fillStyle = '#f0d8a8';
+    ctx.fillText('波次 ' + Math.max(1, this.wave), 175, 34);
+    ctx.fillStyle = '#ff8a7a';
+    ctx.fillText('主公 ' + Math.max(0, this.lordHp) + '/' + (LORD_HP + Math.round(this.lordHpBonus)), 285, 34);
+    ctx.fillStyle = '#a8d8a0';
+    ctx.fillText('击杀 ' + this.score.kills, 440, 34);
+    ctx.fillStyle = '#a8c8e0';
+    const mm = String(Math.floor(this.elapsed / 60)).padStart(2, '0');
+    const ss = String(Math.floor(this.elapsed % 60)).padStart(2, '0');
+    ctx.fillText(mm + ':' + ss, 545, 34);
+    ctx.fillStyle = '#e8c35a';
+    ctx.textAlign = 'right';
+    ctx.fillText('金 ' + getSave().gold, 732, 34);
+    ctx.restore();
+
+    // 主动道具按钮（点击即用 / 指向型可拖拽）
+    for (let i = 0; i < this.actives.length; i++) {
+      const a = this.actives[i];
+      const item = ITEMS[a.id];
+      const bx = ACT_X + i * (ACT_W + ACT_GAP);
+      ctx.save();
+      ctx.fillStyle = a.cd > 0 ? '#3a3330' : '#4a2a3a';
+      ctx.strokeStyle = '#c98ab8';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      roundRect(ctx, bx, TOP_Y, ACT_W, TOP_H, 10);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = a.cd > 0 ? '#888' : '#f0c8e0';
+      ctx.font = '24px KaiTi, STKaiti, serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const label = a.cd > 0 ? item.name + ' ' + Math.ceil(a.cd) + 's' : item.name;
+      ctx.fillText(label, bx + ACT_W / 2, TOP_Y + TOP_H / 2 - (a.cd > 0 ? 0 : 8));
+      if (a.cd <= 0) {
+        ctx.fillStyle = '#a8889a';
+        ctx.font = '18px KaiTi, STKaiti, serif';
+        ctx.fillText(item.targeted ? '拖到将士' : 'Lv' + a.level, bx + ACT_W / 2, TOP_Y + TOP_H - 14);
+      }
+      ctx.restore();
+    }
+
+    this.btnSpeed.draw(ctx);
+    this.btnPause.draw(ctx);
+    this.btnGear.draw(ctx);
+  }
+
+  renderBar(ctx) {
+    ctx.save();
+    // 栏背景
+    ctx.fillStyle = 'rgba(30, 22, 14, 0.9)';
+    ctx.fillRect(0, 1170, 750, 164);
+    ctx.strokeStyle = '#5a4528';
+    ctx.beginPath();
+    ctx.moveTo(0, 1170);
+    ctx.lineTo(750, 1170);
+    ctx.stroke();
+
+    for (let i = 0; i < 5; i++) {
+      const sx = SLOT_X + i * (SLOT_W + SLOT_GAP);
+      const item = this.bar.slots[i];
+      const dragging = this.drag && this.drag.source === 'slot' && this.drag.index === i && this.drag.moved;
+      ctx.fillStyle = '#2e2418';
+      ctx.fillRect(sx, SLOT_Y, SLOT_W, SLOT_H);
+      ctx.strokeStyle = '#6a5232';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(sx, SLOT_Y, SLOT_W, SLOT_H);
+      if (item && !dragging) {
+        const style = item.kind === 'base' ? BASE_UNITS[item.char] : ADV_CHARS[item.char];
+        ctx.fillStyle = (style && style.color) || '#e8c35a';
+        ctx.font = 'bold 48px KaiTi, STKaiti, serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(item.char, sx + SLOT_W / 2, SLOT_Y + SLOT_H / 2 + 2);
+        if (item.tier > 1) {
+          ctx.fillStyle = '#e8c35a';
+          ctx.font = 'bold 18px sans-serif';
+          ctx.fillText('ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ'[Math.min(item.tier, 10) - 1], sx + SLOT_W - 16, SLOT_Y + 16);
+        }
+        if (item.kind === 'adv') {
+          ctx.fillStyle = '#e8c35a';
+          ctx.font = '16px KaiTi, STKaiti, serif';
+          ctx.textAlign = 'left';
+          ctx.fillText('词', sx + 8, SLOT_Y + 16);
+        }
+      }
+    }
+    ctx.restore();
+
+    // 刷新按钮（带冷却）
+    const ready = this.bar.ready;
+    this.btnRefresh.label = ready ? '刷新' : '冷却 ' + Math.ceil(this.bar.cool) + 's';
+    this.btnRefresh.opts.disabled = !ready;
+    this.btnRefresh.opts.sub = ready ? '下次冷却 ' + (this.bar.coolMax + 10) + 's' : '';
+    this.btnRefresh.draw(ctx);
+
+    this.btnShovel.label = '铲子 ×' + this.bar.shovels + (this.shovelMode ? '·选格' : '');
+    this.btnShovel.opts.disabled = this.bar.shovels === 0;
+    this.btnShovel.draw(ctx);
+  }
+
+  renderSettings(ctx) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.fillRect(0, 0, 750, 1334);
+    drawPanel(ctx, 125, 430, 500, 520, '设 置');
+
+    // 音量滑条
+    const vol = Math.round(Audio.getVolume() * 100);
+    ctx.fillStyle = '#f0d8a8';
+    ctx.font = '28px KaiTi, STKaiti, serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('音量 ' + vol, 375, 555);
+    ctx.fillStyle = '#3a322a';
+    ctx.fillRect(SLIDER_X, SLIDER_Y - 6, SLIDER_W, 12);
+    ctx.fillStyle = '#c9a86a';
+    ctx.fillRect(SLIDER_X, SLIDER_Y - 6, SLIDER_W * (vol / 100), 12);
+    ctx.beginPath();
+    ctx.arc(SLIDER_X + SLIDER_W * (vol / 100), SLIDER_Y, 18, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffd75a';
+    ctx.fill();
+    ctx.strokeStyle = '#8a6a42';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
+
+    this.btnResume.draw(ctx);
+    this.btnExit.draw(ctx);
+  }
+
+  renderOver(ctx) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.fillRect(0, 0, 750, 1334);
+    drawPanel(ctx, 125, 480, 500, 540, '战 报');
+    ctx.fillStyle = '#f0d8a8';
+    ctx.font = '32px KaiTi, STKaiti, serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(this.diff.name, 375, 580);
+    ctx.fillText('坚守波次：' + this.score.wave, 375, 630);
+    ctx.fillText('击杀敌军：' + this.score.kills, 375, 680);
+    ctx.fillStyle = '#e8c35a';
+    ctx.font = '40px KaiTi, STKaiti, serif';
+    ctx.fillText('获得金币 ' + this.earnedCoins, 375, 740);
+    if (this.unlockedMsgs.length > 0) {
+      ctx.fillStyle = '#7fe08a';
+      ctx.font = '28px KaiTi, STKaiti, serif';
+      this.unlockedMsgs.forEach((m, i) => ctx.fillText(m, 375, 790 + i * 36));
+    }
+    ctx.restore();
+    this.btnRetry.draw(ctx);
+    this.btnHome.draw(ctx);
+  }
+}
