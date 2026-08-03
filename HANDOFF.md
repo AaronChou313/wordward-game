@@ -4,7 +4,7 @@
 
 This repository is a Three Kingdoms-themed Chinese character tower-defense game. It runs entirely in the browser with Vite, plain ES modules, and Canvas 2D. The current handoff branch is `feature/gameplay-overhaul`, based on `master`, and the remote is `git@github.com:AaronChou313/wordward-game.git`.
 
-The battle-core milestone and all six progression tasks (dual-pity gacha, differentiated items, advanced-character strategies, detailed codex panels, rotating shop stock, and full regression coverage) are implemented and independently reviewed. The online account/ranking milestone remains. Do not assume the original 13-item request is complete until that plan is finished.
+The battle-core milestone and all six progression tasks (dual-pity gacha, differentiated items, advanced-character strategies, detailed codex panels, rotating shop stock, and full regression coverage) are implemented and independently reviewed. Online Task 1 (server workspace and database schema) is implemented; Tasks 2–7 remain. Do not assume the original 13-item request is complete until that plan is finished.
 
 ## Technology and Commands
 
@@ -16,7 +16,7 @@ The battle-core milestone and all six progression tasks (dual-pity gacha, differ
 - Production build: `npm run build`
 - Preview build: `npm run preview`
 
-Latest verified result before this handoff: 14 test files, 145 tests passed; Vite production build passed with 49 transformed modules; `git diff --check` was clean.
+Latest verified result before this handoff: 16 test files, 151 tests passed across the client and API health/config/schema suites; Vite production build passed with 49 transformed modules; Prisma schema validation and `git diff --check` passed.
 
 ## Repository Layout
 
@@ -165,6 +165,20 @@ After progression is stable, implement [the online-system plan](docs/superpowers
 
 See [the online design](docs/superpowers/specs/2026-08-03-online-account-ranking-design.md) before changing security or data-model decisions.
 
+## Completed: Online Task 1
+
+The focused commit subject is `feat: scaffold account api and database`. The implementation adds:
+
+- An isolated `server/` package constrained to Node.js 22, with Fastify 5, Prisma 7, Argon2, JWT, cookie, rate-limit, dotenv, and Vitest dependencies locked independently from the Vite client.
+- Fail-fast environment validation for the PostgreSQL URL and independent 32-character access-token/refresh-token secrets without echoing secret values in errors.
+- A `buildApp(options)` Fastify factory with a 1 MiB body limit, common security plugins, and an exact `GET /api/health` response of `{ status: 'ok' }`.
+- Prisma 7 configuration and PostgreSQL models for `User`, `Profile`, `GameSave`, `MeritClaim`, and `RefreshToken`, including one-to-one profile/save ownership, unique normalized username storage, a floor-qualified merit idempotency constraint, and leaderboard ordering fields/index.
+- A tracked `.env.example` containing placeholders only; no live `.env` or credentials are tracked.
+
+Independent review found and resolved a design conflict before commit: the plan's three-field merit key could not distinguish wave 30 on different endless floors, and a globally unique `runId` would reject later Bosses in the same run. `MeritClaim` therefore stores `endlessFloor` (default 1), uses `(userId, difficulty, endlessFloor, bossWave)` as its unique idempotency key, retains a three-field lookup index, and only indexes `(userId, runId)` without making it unique.
+
+Verification passed the API suite (2 files / 6 tests) under an explicit Node 22.23.2 runtime, Prisma validation without requiring a live environment file, the combined root suite (16 files / 151 tests), the client production build, and production-dependency audit with zero findings. The workstation's default Node 24 emits the expected engine warning, while the supported Node 22 run is green. Next implement Online Task 2 registration and session security.
+
 ## Verification and Manual QA
 
 Automated coverage is strong, and Task 2 received focused Canvas QA, but a full visual browser play-through has not been completed. Before release, manually verify:
@@ -205,6 +219,7 @@ Then read `AGENTS.md`, this file, the approved specs, and the next implementatio
 - Progression Task 3 is commit `802eece` (`feat: expand advanced character strategies`).
 - Progression Task 4 is commit `0a8cd8c` (`feat: add detailed codex attributes`).
 - Progression Task 5 is commit `1808201` (`feat: add rotating four-item shop`).
-- Progression Task 6 uses the focused commit subject `test: cover progression systems`; use `git log` for its immutable hash after checkout.
+- Progression Task 6 is commit `c4d523c` (`test: cover progression systems`).
+- Online Task 1 uses the focused commit subject `feat: scaffold account api and database`; use `git log` for its immutable hash after checkout.
 - The `.superpowers/` execution ledger and agent reports are intentionally ignored and will not be available after cloning. The tracked specs, plans, tests, commits, and this handoff are the durable record.
 - No pull request was created during this handoff. Confirm the branch on GitHub after push before switching devices.

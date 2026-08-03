@@ -1,0 +1,31 @@
+{
+  "name": "wordward-api",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22 <23"
+  },
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prisma:generate": "prisma generate",
+    "prisma:validate": "DATABASE_URL=${DATABASE_URL:-postgresql://validation:validation@localhost:5432/validation} prisma validate",
+    "prisma:migrate:deploy": "prisma migrate deploy"
+  },
+  "dependencies": {
+    "@fastify/cookie": "11.1.2",
+    "@fastify/jwt": "10.2.1",
+    "@fastify/rate-limit": "11.2.0",
+    "@prisma/client": "7.9.1",
+    "argon2": "0.45.1",
+    "dotenv": "^17.4.2",
+    "fastify": "5.11.2"
+  },
+  "devDependencies": {
+    "prisma": "7.9.1",
+    "vitest": "2.1.9"
+  }
+}

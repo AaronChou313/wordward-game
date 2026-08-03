@@ -1,0 +1,94 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AccountStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum Difficulty {
+  EASY
+  NORMAL
+  HARD
+  ENDLESS
+}
+
+model User {
+  id             String          @id @default(cuid())
+  username       String          @unique @db.VarChar(24)
+  passwordHash   String          @map("password_hash") @db.VarChar(255)
+  status         AccountStatus   @default(ACTIVE)
+  meritTotal     Int             @default(0) @map("merit_total")
+  meritReachedAt DateTime?       @map("merit_reached_at")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  profile        Profile?
+  gameSave       GameSave?
+  meritClaims    MeritClaim[]
+  refreshTokens  RefreshToken[]
+
+  @@index([meritTotal(sort: Desc), meritReachedAt(sort: Asc)])
+  @@map("users")
+}
+
+model Profile {
+  userId    String   @id @map("user_id")
+  nickname  String   @db.VarChar(24)
+  avatarUrl String?  @map("avatar_url") @db.VarChar(2048)
+  bio       String   @default("") @db.VarChar(200)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profiles")
+}
+
+model GameSave {
+  userId        String   @id @map("user_id")
+  schemaVersion Int      @map("schema_version")
+  version       Int      @default(1)
+  data          Json     @db.JsonB
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("game_saves")
+}
+
+model MeritClaim {
+  id           String     @id @default(cuid())
+  userId       String     @map("user_id")
+  difficulty   Difficulty
+  endlessFloor Int        @default(1) @map("endless_floor")
+  bossWave     Int        @map("boss_wave")
+  merit        Int
+  runId        String     @map("run_id") @db.VarChar(64)
+  seed         String     @db.VarChar(128)
+  startedAt    DateTime   @map("started_at")
+  finishedAt   DateTime   @map("finished_at")
+  summary      Json       @db.JsonB
+  createdAt    DateTime   @default(now()) @map("created_at")
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, difficulty, endlessFloor, bossWave])
+  @@index([userId, difficulty, bossWave])
+  @@index([userId, runId])
+  @@index([userId, createdAt])
+  @@map("merit_claims")
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique @map("token_hash") @db.VarChar(128)
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("refresh_tokens")
+}
