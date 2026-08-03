@@ -54,6 +54,11 @@ function mergeDefaults(defaults, saved) {
 
 export function migrateSave(raw) {
   const migrated = mergeDefaults(DEFAULT_SAVE, raw);
+  const legacyEndlessClaim = 'endless:30';
+  if (migrated.merit.claimed[legacyEndlessClaim]) {
+    migrated.merit.claimed['endless:1:30'] = true;
+  }
+  delete migrated.merit.claimed[legacyEndlessClaim];
   migrated.version = 2;
   return migrated;
 }

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { claimBossCompletion } from '../battle/progression.js';
 import { migrateSave } from './saveData.js';
 
 describe('migrateSave', () => {
@@ -27,5 +28,50 @@ describe('migrateSave', () => {
       gacha: { smallPity: 0, bigPity: 0 },
       shop: { stock: [] },
     });
+  });
+
+  it('normalizes a legacy endless wave-30 claim before progression checks', () => {
+    const migrated = migrateSave({
+      version: 1,
+      diff: {
+        unlocked: ['easy', 'normal', 'hard', 'endless'],
+        endlessFloor: 1,
+        best: {},
+        selected: { id: 'endless', floor: 1 },
+      },
+      merit: { total: 8, claimed: { 'endless:30': true } },
+    });
+
+    expect(migrated.merit.claimed).toEqual({ 'endless:1:30': true });
+
+    const repeat = claimBossCompletion(migrated, 'endless', 30, 1);
+
+    expect(repeat).toEqual({ claimed: false, merit: 0, unlocked: null });
+    expect(migrated.merit.total).toBe(8);
+    expect(migrated.diff.endlessFloor).toBe(1);
+  });
+
+  it('idempotently collapses legacy and canonical endless claims to one key', () => {
+    const raw = {
+      version: 2,
+      merit: {
+        total: 9,
+        claimed: {
+          'easy:30': true,
+          'endless:30': true,
+          'endless:1:30': true,
+        },
+      },
+    };
+
+    const first = migrateSave(raw);
+    const second = migrateSave(first);
+
+    expect(first.merit.claimed).toEqual({
+      'easy:30': true,
+      'endless:1:30': true,
+    });
+    expect(second.merit.claimed).toEqual(first.merit.claimed);
+    expect(second.merit.total).toBe(9);
   });
 });
