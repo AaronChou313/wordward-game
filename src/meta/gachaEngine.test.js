@@ -253,6 +253,81 @@ describe('drawGacha', () => {
     expect(itemSave.items.equippedActive[0].level).toBe(4);
   });
 
+  it('grants a first-time precious item directly at level two', async () => {
+    const { drawGacha } = await import('./gachaEngine.js');
+    const save = makeSave();
+
+    const result = drawGacha(save, sequenceRandom(0.95, 0.45, 0));
+
+    expect(result).toMatchObject({
+      rarity: 'precious',
+      kind: 'item',
+      itemId: 'fire',
+      level: 2,
+      upgraded: false,
+    });
+    expect(save.items.owned.fire).toBe(2);
+  });
+
+  it('converts a precious character to gold when the whole pool is unlocked', async () => {
+    const { drawGacha } = await import('./gachaEngine.js');
+    const { ADV_CHARS } = await import('../config/units.js');
+    const unlockedChars = Object.keys(ADV_CHARS);
+    const save = makeSave({ unlockedChars: [...unlockedChars] });
+
+    const result = drawGacha(save, sequenceRandom(0.95, 0, 0));
+
+    expect(result).toMatchObject({
+      rarity: 'precious',
+      kind: 'character',
+      character: unlockedChars[0],
+      converted: true,
+      amount: 400,
+    });
+    expect(save.gold).toBe(400);
+    expect(save.unlockedChars).toEqual(unlockedChars);
+  });
+
+  it('grants the configured rare and precious gold rewards', async () => {
+    const { drawGacha } = await import('./gachaEngine.js');
+    const rareSave = makeSave();
+    const preciousSave = makeSave();
+
+    const rare = drawGacha(rareSave, sequenceRandom(0.72, 0.99));
+    const precious = drawGacha(preciousSave, sequenceRandom(0.95, 0.99));
+
+    expect(rare).toMatchObject({ rarity: 'rare', rewardId: 'rare-gold', amount: 200 });
+    expect(precious).toMatchObject({ rarity: 'precious', rewardId: 'precious-gold', amount: 600 });
+    expect(rareSave.gold).toBe(200);
+    expect(preciousSave.gold).toBe(600);
+  });
+
+  it('hits the 10-draw and 50-draw guarantees at their exact sequential draws', async () => {
+    const { drawGacha } = await import('./gachaEngine.js');
+    const save = makeSave();
+    const rarities = Array.from({ length: 50 }, () => drawGacha(save, () => 0).rarity);
+
+    expect(rarities.slice(0, 9)).toEqual(Array(9).fill('common'));
+    expect(rarities[9]).toBe('rare');
+    expect(rarities.slice(10, 49).filter((rarity) => rarity === 'rare')).toHaveLength(3);
+    expect(rarities[49]).toBe('precious');
+    expect(save.gacha).toMatchObject({ smallPity: 0, bigPity: 0 });
+  });
+
+  it('preserves pity through serialized reloads before exact guarantees', async () => {
+    const { drawGacha } = await import('./gachaEngine.js');
+    const { migrateSave } = await import('./saveData.js');
+    let save = makeSave();
+
+    for (let draw = 0; draw < 9; draw++) drawGacha(save, () => 0);
+    save = migrateSave(JSON.parse(JSON.stringify(save)));
+    expect(drawGacha(save, () => 0).rarity).toBe('rare');
+
+    for (let draw = 10; draw < 49; draw++) drawGacha(save, () => 0);
+    save = migrateSave(JSON.parse(JSON.stringify(save)));
+    expect(drawGacha(save, () => 0).rarity).toBe('precious');
+  });
+
   it('records the newest human-readable result and keeps only ten entries', async () => {
     const { drawGacha } = await import('./gachaEngine.js');
     const previous = Array.from({ length: 10 }, (_, index) => ({

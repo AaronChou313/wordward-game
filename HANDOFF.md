@@ -4,7 +4,7 @@
 
 This repository is a Three Kingdoms-themed Chinese character tower-defense game. It runs entirely in the browser with Vite, plain ES modules, and Canvas 2D. The current handoff branch is `feature/gameplay-overhaul`, based on `master`, and the remote is `git@github.com:AaronChou313/wordward-game.git`.
 
-The battle-core milestone is implemented and reviewed. Progression Tasks 1–5 (dual-pity gacha, differentiated items, advanced-character strategies, detailed codex panels, and rotating shop stock) are implemented and independently reviewed; Progression Task 6 and the online account/ranking milestone remain. Do not assume the original 13-item request is complete until those plans are finished.
+The battle-core milestone and all six progression tasks (dual-pity gacha, differentiated items, advanced-character strategies, detailed codex panels, rotating shop stock, and full regression coverage) are implemented and independently reviewed. The online account/ranking milestone remains. Do not assume the original 13-item request is complete until that plan is finished.
 
 ## Technology and Commands
 
@@ -16,7 +16,7 @@ The battle-core milestone is implemented and reviewed. Progression Tasks 1–5 (
 - Production build: `npm run build`
 - Preview build: `npm run preview`
 
-Latest verified result before this handoff: 14 test files, 135 tests passed; Vite production build passed with 49 transformed modules; `git diff --check` was clean.
+Latest verified result before this handoff: 14 test files, 145 tests passed; Vite production build passed with 49 transformed modules; `git diff --check` was clean.
 
 ## Repository Layout
 
@@ -55,7 +55,7 @@ Important battle modules added during this milestone include:
 - `src/battle/blocking.js`
 - `src/config/enemies.js`
 
-## Remaining Milestone 1: Progression and Collection
+## Completed Milestone 1: Progression and Collection
 
 Implement [the progression plan](docs/superpowers/plans/2026-08-03-progression-systems.md) next, task by task and test-first. Required scope:
 
@@ -64,7 +64,7 @@ Implement [the progression plan](docs/superpowers/plans/2026-08-03-progression-s
 3. Completed: additional advanced characters/word combinations with unique strategic roles.
 4. Completed: clickable codex detail panels for units, words, items, elites, and Bosses.
 5. Completed: shop inventory containing up to four unique unowned items, refreshed only after battle settlement; upgrades remain in inventory.
-6. Next: full progression regression pass.
+6. Completed: full progression regression pass.
 
 ## Completed: Progression Task 1
 
@@ -133,6 +133,21 @@ The commit subject is `feat: add rotating four-item shop`. The implementation ad
 
 Canvas QA verified stable repeated visits, a 4-to-3 purchase without replacement, a new four-item stock after voluntary battle exit, exclusion of the purchased item, and a clean browser console. Independent review reported no Critical or Important issues. Task 6 should add explicit regressions for repeated `gameOver()`, migration of initialized empty/non-empty stocks, and the acquire-then-filter/sell-without-backfill lifecycle.
 
+## Completed: Progression Task 6
+
+The focused commit subject is `test: cover progression systems`. The regression pass adds:
+
+- Exact sequential draw assertions for the tenth rare-or-better and fiftieth precious guarantees, including JSON serialization plus save migration immediately before both guaranteed draws.
+- Prize boundary coverage for first-time precious items at Lv2, all-characters-unlocked precious conversion, and rare/precious gold outcomes.
+- Defensive active-slot normalization that deduplicates corrupted saves and caps battle loadout entries at the configured three-slot limit.
+- Shield-prefix connect/disconnect assertions that preserve blocker health ratio and restore baseline capacity.
+- Direct battle-update coverage for recording only the actual spawned elite identity, plus a lethal Boss burn integration proving kill, merit, and unlock settlement run exactly once.
+- Shop regressions for repeated `gameOver()` settlement, initialized empty/non-empty migration, and externally acquired stock filtering without backfill after sale.
+
+The final production-preview smoke test performed a real draw, reloaded the page, reopened gacha, and confirmed the displayed pity distances remained 9 and 49 with the recent result intact. The browser console was clean. Automated verification passed 14 test files / 145 tests, the Vite build transformed 49 modules, and `git diff --check` passed.
+
+Independent review reported no Critical or Important issues. Remaining low-risk hardening candidates are a full `BattleScene.update()` lethal-burn wiring test and defensive deduplication/capping of deliberately corrupted passive-item arrays; normal inventory UI does not produce such passive arrays.
+
 ## Remaining Milestone 2: Accounts and Ranking
 
 After progression is stable, implement [the online-system plan](docs/superpowers/plans/2026-08-03-online-account-ranking.md). The accepted architecture is:
@@ -189,6 +204,7 @@ Then read `AGENTS.md`, this file, the approved specs, and the next implementatio
 - Progression Task 2 is commit `e1daa09` (`feat: differentiate active and passive items`).
 - Progression Task 3 is commit `802eece` (`feat: expand advanced character strategies`).
 - Progression Task 4 is commit `0a8cd8c` (`feat: add detailed codex attributes`).
-- Progression Task 5 uses the focused commit subject `feat: add rotating four-item shop`; use `git log` for its immutable hash after checkout.
+- Progression Task 5 is commit `1808201` (`feat: add rotating four-item shop`).
+- Progression Task 6 uses the focused commit subject `test: cover progression systems`; use `git log` for its immutable hash after checkout.
 - The `.superpowers/` execution ledger and agent reports are intentionally ignored and will not be available after cloning. The tracked specs, plans, tests, commits, and this handoff are the durable record.
 - No pull request was created during this handoff. Confirm the branch on GitHub after push before switching devices.

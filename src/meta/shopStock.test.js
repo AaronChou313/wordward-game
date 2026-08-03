@@ -67,6 +67,17 @@ describe('shop stock', () => {
     expect(refreshed).toHaveLength(4);
     expect(save.shop.stock).toEqual(refreshed);
   });
+
+  it('filters externally acquired stock without backfilling after a later sale', () => {
+    const save = freshSave();
+    save.shop = { initialized: true, stock: ['fire', 'recruit'] };
+
+    save.items.owned.fire = 1;
+    expect(ensureShopStock(save, () => 0.5)).toEqual(['recruit']);
+
+    delete save.items.owned.fire;
+    expect(ensureShopStock(save, () => 0.5)).toEqual(['recruit']);
+  });
 });
 
 function freshSave() {

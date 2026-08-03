@@ -66,6 +66,13 @@ describe('advanced prefix combat hooks', () => {
     expect(shielded.blockMaxHp).toBe(Math.round(baseline.blockMaxHp * 1.5));
     expect(shielded.blockHp).toBe(Math.round(shielded.blockMaxHp / 2));
     expect(shielded.blockCapacity).toBe(baseline.blockCapacity + 1);
+
+    grid.cells[0][0].tower = null;
+    rescan(grid, [shielded], [], null);
+
+    expect(shielded.blockMaxHp).toBe(baseline.blockMaxHp);
+    expect(shielded.blockHp).toBe(Math.round(baseline.blockMaxHp / 2));
+    expect(shielded.blockCapacity).toBe(baseline.blockCapacity);
   });
 
   it('ticks fire damage over time and attributes a lethal burn to its source', async () => {

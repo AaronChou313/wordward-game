@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { getSave } from '../meta/saveData.js';
 import { BattleScene } from './battleScene.js';
 import { Effects } from './effects.js';
-import { Enemy } from './enemy.js';
+import { applyBurnEffect, Enemy } from './enemy.js';
 import { PATH_TOTAL, pointAt } from './path.js';
 import { Score } from './score.js';
 import { Tower } from './tower.js';
@@ -99,5 +99,76 @@ describe('BattleScene defeat ordering', () => {
     expect(scene.over).toBe(true);
     expect(save.shop.stock).toHaveLength(4);
     expect(new Set(save.shop.stock).size).toBe(4);
+
+    const settledGold = save.gold;
+    const settledStock = [...save.shop.stock];
+    scene.gameOver();
+
+    expect(save.gold).toBe(settledGold);
+    expect(save.shop.stock).toEqual(settledStock);
+  });
+
+  it('records the actual special enemy spawned by the update loop exactly once', () => {
+    const save = getSave();
+    save.codex.elite = [];
+    save.codex.boss = [];
+    save.diff.selected = { id: 'easy' };
+
+    const scene = new BattleScene({});
+    scene.enter();
+    scene.wave = 9;
+    scene.waveState = 'rest';
+    scene.restTimer = 0;
+
+    scene.update(0.01);
+    const special = scene.spawnQueue.find((descriptor) => descriptor.type === 'elite');
+    scene.spawnIndex = scene.spawnQueue.indexOf(special);
+    scene.spawnTimer = 0;
+    scene.update(0.01);
+    scene.update(0.01);
+
+    expect(special).toBeDefined();
+    expect(save.codex.elite).toEqual([special.key]);
+    expect(save.codex.boss).toEqual([]);
+  });
+
+  it('settles a lethal Boss burn through the unified kill path only once', () => {
+    const save = getSave();
+    save.merit = { total: 0, claimed: {} };
+    save.diff.unlocked = ['easy'];
+    save.diff.endlessFloor = 1;
+
+    const scene = new BattleScene({});
+    scene.diff = { id: 'easy', dropMul: 0 };
+    scene.wave = 30;
+    scene.score = new Score();
+    scene.heroGroups = [];
+    scene.effects = new Effects();
+    scene.bar = { kills: 0, onKill() { this.kills++; } };
+    const source = new Tower('弓', 1, 0, 0, 'base');
+    const boss = new Enemy({
+      id: 'burn-boss',
+      type: 'boss',
+      name: '燃烧 Boss',
+      hp: 5,
+      speed: 1,
+      scale: 1,
+      color: '#a83d32',
+      skill: null,
+    });
+    applyBurnEffect(boss, source, 1, 10);
+    const context = {
+      onBurnDamage() {},
+      onBurnKill: (enemy, tower) => scene.handleKill(enemy, tower),
+    };
+
+    boss.update(1, context);
+    boss.update(1, context);
+
+    expect(scene.score.kills).toBe(1);
+    expect(scene.bar.kills).toBe(1);
+    expect(boss.bossDefeatHandled).toBe(true);
+    expect(save.merit).toEqual({ total: 1, claimed: { 'easy:30': true } });
+    expect(save.diff.unlocked).toContain('normal');
   });
 });

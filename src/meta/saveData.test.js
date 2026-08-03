@@ -48,6 +48,18 @@ describe('migrateSave', () => {
     });
   });
 
+  it('preserves initialized shop stock including an intentionally empty shop', () => {
+    expect(migrateSave({
+      version: 2,
+      shop: { initialized: true, stock: [] },
+    }).shop).toEqual({ initialized: true, stock: [] });
+
+    expect(migrateSave({
+      version: 2,
+      shop: { initialized: true, stock: ['fire', 'recruit'] },
+    }).shop).toEqual({ initialized: true, stock: ['fire', 'recruit'] });
+  });
+
   it('normalizes a legacy endless wave-30 claim before progression checks', () => {
     const migrated = migrateSave({
       version: 1,

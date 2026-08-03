@@ -18,7 +18,7 @@ import { assignBlockers } from './blocking.js';
 import { pointToCell, cellCenter, CELL } from '../config/map.js';
 import { BASE_UNITS, ADV_CHARS } from '../config/units.js';
 import { HEROES, PREFIX_BUFFS, HERO_NAMES } from '../config/words.js';
-import { ITEMS } from '../config/items.js';
+import { ITEMS, MAX_ACTIVE } from '../config/items.js';
 import { EQUIP, equipStats, dropChance, rollRarity, rollEquipId, rarityById } from '../config/equipment.js';
 import { CODEX_SET_BONUS, codexCat } from '../config/codex.js';
 import { Button, roundRect } from '../ui/button.js';
@@ -113,12 +113,15 @@ export function stunDurationAfterBuffs(duration, itemBuffs = {}) {
 
 export function normalizeActiveItems(equipped, owned = {}) {
   const normalized = [];
+  const seen = new Set();
   for (const entry of equipped || []) {
     const id = typeof entry === 'string' ? entry : entry && entry.id;
     const item = ITEMS[id];
     const ownedLevel = owned[id];
-    if (!item || item.kind !== 'active' || !Number.isFinite(ownedLevel) || ownedLevel < 1) continue;
+    if (seen.has(id) || !item || item.kind !== 'active' || !Number.isFinite(ownedLevel) || ownedLevel < 1) continue;
+    seen.add(id);
     normalized.push({ id, level: Math.floor(ownedLevel), cd: 0 });
+    if (normalized.length >= MAX_ACTIVE) break;
   }
   return normalized;
 }

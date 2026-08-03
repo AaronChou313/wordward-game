@@ -209,6 +209,24 @@ describe('battle item save normalization', () => {
       { id: 'train', level: 3, cd: 0 },
     ]);
   });
+
+  it('deduplicates corrupted active slots and enforces the three-slot cap', async () => {
+    const { normalizeActiveItems } = await import('../battle/battleScene.js');
+    const owned = { fire: 2, train: 3, recruit: 1, reinforce: 1, warDrum: 1 };
+
+    expect(normalizeActiveItems([
+      'fire',
+      { id: 'fire', level: 99 },
+      'train',
+      'recruit',
+      'reinforce',
+      'warDrum',
+    ], owned)).toEqual([
+      { id: 'fire', level: 2, cd: 0 },
+      { id: 'train', level: 3, cd: 0 },
+      { id: 'recruit', level: 1, cd: 0 },
+    ]);
+  });
 });
 
 describe('inventory item presentation', () => {
