@@ -1,15 +1,20 @@
 // 图鉴：普通文字 / 增益文字 / 进阶词组，摆放或组成即解锁，附金币奖励
 import { BASE_UNITS } from './units.js';
 import { PREFIX_BUFFS, HEROES } from './words.js';
+import { ITEMS } from './items.js';
+import { BOSS_ENEMIES, ELITE_ENEMIES } from './enemies.js';
 
 export const CODEX_CATS = [
   { id: 'base',   name: '普通文字', keys: Object.keys(BASE_UNITS),   reward: 30 },
   { id: 'prefix', name: '增益文字', keys: Object.keys(PREFIX_BUFFS), reward: 80 },
   { id: 'hero',   name: '进阶词组', keys: Object.keys(HEROES),       reward: 150 },
+  { id: 'item',   name: '军需道具', keys: Object.keys(ITEMS),         reward: 0 },
+  { id: 'elite',  name: '精英敌军', keys: ELITE_ENEMIES.map((enemy) => enemy.key), reward: 0 },
+  { id: 'boss',   name: '敌军首领', keys: BOSS_ENEMIES.map((enemy) => enemy.key), reward: 0 },
 ];
 
 // 集齐整类的额外奖励
-export const CODEX_SET_BONUS = { base: 300, prefix: 500, hero: 1500 };
+export const CODEX_SET_BONUS = { base: 300, prefix: 500, hero: 1500, item: 0, elite: 0, boss: 0 };
 
 export const CODEX_META = {
   prefix: Object.fromEntries(Object.entries(PREFIX_BUFFS).map(([char, prefix]) => [char, {

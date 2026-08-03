@@ -37,6 +37,7 @@ function descriptorFor(wave, archetype, waveCfg, normalIndex) {
     : 'wave-' + wave + '-' + archetype.type + '-' + archetype.key;
   return {
     id,
+    key: archetype.key,
     type: archetype.type,
     name: archetype.name,
     hp: Math.round(waveCfg.hp * archetype.hpMultiplier),

@@ -26,6 +26,7 @@ import { drawPanel } from '../ui/panel.js';
 import { Toast } from '../ui/toast.js';
 import { Audio } from '../core/audio.js';
 import { getSave, addGold, persist, grantEquip, equipByUid } from '../meta/saveData.js';
+import { recordCodexEncounter } from '../meta/codexDetails.js';
 
 // 顶部按钮行
 const TOP_Y = 64, TOP_H = 56;
@@ -669,6 +670,7 @@ export class BattleScene {
           this.spawnTimer = this.waveCfg.spawnInterval;
           const descriptor = this.spawnQueue[this.spawnIndex++];
           this.toSpawn = this.spawnQueue.length - this.spawnIndex;
+          if (recordCodexEncounter(getSave(), descriptor.type, descriptor.key)) persist();
           const e = new Enemy(descriptor);
           const p = pointAt(0);
           e.x = p.x; e.y = p.y;

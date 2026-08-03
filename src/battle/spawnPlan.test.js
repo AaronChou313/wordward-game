@@ -68,6 +68,7 @@ describe('spawnPlan', () => {
 
     expect(special.id).toBe('wave-10-elite-marksman-captain');
     expect(special).toMatchObject({
+      key: 'marksman-captain',
       name: '神射都尉',
       type: 'elite',
       scale: expect.any(Number),

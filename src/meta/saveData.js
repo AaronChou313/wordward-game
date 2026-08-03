@@ -13,7 +13,7 @@ const DEFAULT_SAVE = {
   // 装备：owned 为实例列表 [{uid,id,rarity,lvl}]，player/units 为槽位 → uid
   equipment: { owned: [], nextUid: 1, player: { '武器': null, '护甲': null, '饰品': null }, units: { '兵': null, '骑': null, '枪': null, '弓': null, '炮': null } },
   // 图鉴：各类已解锁 key
-  codex: { base: [], prefix: [], hero: [] },
+  codex: { base: [], prefix: [], hero: [], elite: [], boss: [] },
   merit: { total: 0, claimed: {} },
   gacha: { smallPity: 0, bigPity: 0, history: [] },
   shop: { stock: [] },

@@ -24,6 +24,7 @@ describe('migrateSave', () => {
     expect(migrateSave(version1Save)).toEqual({
       ...version1Save,
       version: 2,
+      codex: { ...version1Save.codex, elite: [], boss: [] },
       merit: { total: 0, claimed: {} },
       gacha: { smallPity: 0, bigPity: 0, history: [] },
       shop: { stock: [] },
