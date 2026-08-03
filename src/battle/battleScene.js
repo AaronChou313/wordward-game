@@ -55,13 +55,12 @@ export class BattleScene {
     this.paused = false;
     this.speed = 1;
     this.over = false;
-    this.shovelMode = false;
     this.settingsOpen = false;
     this.campOpen = false;
     this.volumeDragging = false;
     this.selected = null;  // Tower 或 HeroGroup
     this.elapsed = 0;
-    this.drag = null;      // { source:'slot'|'tower'|'active', index?, tower?, id?, char, kind, x, y, downX, downY, moved }
+    this.drag = null;      // { source:'slot'|'tower'|'active'|'shovel', index?, tower?, id?, char, kind, x, y, downX, downY, moved }
     this.pointer = { x: 0, y: 0 };
 
     // 被动道具加成
@@ -130,15 +129,12 @@ export class BattleScene {
     }, { fontSize: 22 });
     this.btnGear = new Button(671, TOP_Y, 56, TOP_H, '⚙', () => {
       this.settingsOpen = true;
+      this.drag = null;
+      this.selected = null;
       Audio.click();
     }, { fontSize: 26 });
     this.btnRefresh = new Button(SLOT_X, BTN_Y, 470, BTN_H, '刷新', () => this.tryRefresh(), { fontSize: 26 });
-    this.btnShovel = new Button(521, BTN_Y, 211, BTN_H, '铲子', () => {
-      if (this.bar.shovels > 0) {
-        this.shovelMode = !this.shovelMode;
-        Audio.click();
-      }
-    }, { fontSize: 26 });
+    this.btnShovel = new Button(521, BTN_Y, 211, BTN_H, '铲', () => {}, { fontSize: 32 });
 
     // 结算面板按钮
     this.btnRetry = new Button(175, 830, 400, 70, '再来一局', () => { Audio.click(); this.scenes.switch('battle'); });
@@ -163,7 +159,7 @@ export class BattleScene {
   tryRefresh() {
     if (this.bar.refresh()) {
       Audio.click();
-      if (this.bar.sinceShovel === 0) Toast.show('获得铲子！点铲子按钮激活新格子');
+      if (this.bar.sinceShovel === 0) Toast.show('获得铲子！拖到未激活格子');
     }
   }
 
@@ -195,6 +191,7 @@ export class BattleScene {
       return;
     }
     if (this.settingsOpen) {
+      this.drag = null;
       if (this.btnResume.hitTest(x, y)) return this.btnResume.onClick();
       if (this.btnExit.hitTest(x, y)) return this.btnExit.onClick();
       if (this.onSlider(x, y)) {
@@ -204,6 +201,7 @@ export class BattleScene {
       return;
     }
     if (this.campOpen) {
+      this.drag = null;
       if (this.btnCloseCamp.hitTest(x, y)) this.btnCloseCamp.onClick();
       return;
     }
@@ -212,7 +210,12 @@ export class BattleScene {
     if (this.btnCamp.hitTest(x, y)) return this.btnCamp.onClick();
     if (this.btnGear.hitTest(x, y)) return this.btnGear.onClick();
     if (this.btnRefresh.hitTest(x, y)) return this.tryRefresh();
-    if (this.btnShovel.hitTest(x, y)) return this.btnShovel.onClick();
+    if (this.btnShovel.hitTest(x, y)) {
+      if (this.bar.shovels > 0) {
+        this.drag = { source: 'shovel', char: '铲', x, y, downX: x, downY: y, moved: false };
+      }
+      return;
+    }
 
     // 主动道具：非指向型点击即用，指向型（练兵符）按下开始拖拽
     const ai = this.activeAt(x, y);
@@ -225,23 +228,7 @@ export class BattleScene {
       return;
     }
 
-    // 铲子模式：点未激活格子
     const cellPos = pointToCell(x, y);
-    if (this.shovelMode) {
-      if (cellPos) {
-        const cell = this.grid.get(cellPos.c, cellPos.r);
-        if (cell && cell.kind === 'slot' && !cell.active && this.bar.shovels > 0) {
-          this.grid.activate(cellPos.c, cellPos.r);
-          this.bar.shovels--;
-          if (this.bar.shovels === 0) this.shovelMode = false;
-          this.effects.ring(x, y, '#c9a86a', 14, 240);
-          Audio.place();
-          Toast.show('格子已激活');
-        }
-      }
-      return;
-    }
-
     // 从刷新栏拖起
     const slotIdx = this.slotAt(x, y);
     if (slotIdx >= 0 && this.bar.slots[slotIdx]) {
@@ -265,7 +252,15 @@ export class BattleScene {
 
   onPointerMove(x, y) {
     this.pointer = { x, y };
-    if (this.campOpen) return;
+    if (this.settingsOpen) {
+      this.drag = null;
+      if (this.volumeDragging) this.setVolumeFromX(x);
+      return;
+    }
+    if (this.campOpen) {
+      this.drag = null;
+      return;
+    }
     if (this.volumeDragging) {
       this.setVolumeFromX(x);
       return;
@@ -305,6 +300,18 @@ export class BattleScene {
     this.selected = null;
     const slotIdx = this.slotAt(x, y);
     const cellPos = pointToCell(x, y);
+
+    if (drag.source === 'shovel') {
+      if (!cellPos || this.bar.shovels <= 0) return;
+      const cell = this.grid.get(cellPos.c, cellPos.r);
+      if (!cell || cell.kind !== 'slot' || cell.active) return;
+      if (!this.grid.activate(cellPos.c, cellPos.r)) return;
+      this.bar.shovels--;
+      this.effects.ring(x, y, '#c9a86a', 14, 240);
+      Audio.place();
+      Toast.show('格子已激活');
+      return;
+    }
 
     if (drag.source === 'active') {
       // 练兵符：落在任意将士上升 1 阶
@@ -742,6 +749,7 @@ export class BattleScene {
     ctx.translate(shake.x, shake.y);
 
     this.grid.render(ctx);
+    this.renderShovelTarget(ctx);
     this.grid.renderLord(ctx, this.lordHp, LORD_HP + Math.round(this.lordHpBonus));
     for (const g of this.heroGroups) {
       g.render(ctx);
@@ -880,6 +888,21 @@ export class BattleScene {
     ctx.restore();
   }
 
+  renderShovelTarget(ctx) {
+    if (!this.drag || this.drag.source !== 'shovel' || !this.drag.moved) return;
+    const cellPos = pointToCell(this.drag.x, this.drag.y);
+    if (!cellPos) return;
+    const cell = this.grid.get(cellPos.c, cellPos.r);
+    if (!cell) return;
+    const center = cellCenter(cellPos.c, cellPos.r);
+    const valid = cell.kind === 'slot' && !cell.active && this.bar.shovels > 0;
+    ctx.save();
+    ctx.strokeStyle = valid ? '#c9a86a' : 'rgba(150, 75, 65, 0.85)';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(center.x - CELL / 2 + 6, center.y - CELL / 2 + 6, CELL - 12, CELL - 12);
+    ctx.restore();
+  }
+
   renderHud(ctx) {
     ctx.save();
     ctx.font = '24px KaiTi, STKaiti, serif';
@@ -984,8 +1007,9 @@ export class BattleScene {
     this.btnRefresh.opts.sub = ready ? '下次冷却 ' + (this.bar.coolMax + 10) + 's' : '';
     this.btnRefresh.draw(ctx);
 
-    this.btnShovel.label = '铲子 ×' + this.bar.shovels + (this.shovelMode ? '·选格' : '');
+    this.btnShovel.label = '铲 ×' + this.bar.shovels;
     this.btnShovel.opts.disabled = this.bar.shovels === 0;
+    this.btnShovel.opts.sub = this.bar.shovels > 0 ? '拖至未激活格' : '暂无铲子';
     this.btnShovel.draw(ctx);
   }
 
