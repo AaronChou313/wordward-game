@@ -33,7 +33,7 @@ export class Grid {
   allowsUnit(unit, c, r) {
     const cell = this.get(c, r);
     if (!cell || !unit) return false;
-    if (cell.kind === 'path') return unit.kind === 'base' && unit.char === '兵';
+    if (cell.kind === 'path') return unit.kind === 'base' && unit.char === '兵' && !unit.group;
     return cell.active;
   }
 

@@ -4,6 +4,9 @@ import { Enemy } from './enemy.js';
 import { mergeInto } from './merge.js';
 import { Tower } from './tower.js';
 import { assignBlockers, blockDamage, blockStats } from './blocking.js';
+import { BattleScene } from './battleScene.js';
+import { Effects } from './effects.js';
+import { cellCenter } from '../config/map.js';
 
 function roadInfantry(tier = 1, c = 0, r = 1) {
   const tower = new Tower('兵', tier, c, r, 'base');
@@ -17,6 +20,28 @@ function enemyAt(progress, maxHp = 100) {
   return enemy;
 }
 
+function minimalScene() {
+  const scene = new BattleScene({});
+  scene.grid = new Grid();
+  scene.towers = [];
+  scene.heroGroups = [];
+  scene.enemies = [];
+  scene.effects = new Effects();
+  scene.selected = null;
+  scene.settingsOpen = false;
+  scene.campOpen = false;
+  scene.pointer = { x: 0, y: 0 };
+  scene.bar = {
+    slots: Array(5).fill(null),
+    take(index) {
+      const item = this.slots[index];
+      this.slots[index] = null;
+      return item;
+    },
+  };
+  return scene;
+}
+
 describe('road deployment legality', () => {
   it('allows only a base infantry unit on an empty road cell', () => {
     const grid = new Grid();
@@ -27,6 +52,10 @@ describe('road deployment legality', () => {
     expect(grid.canPlace({ char: '兵', kind: 'hero' }, 0, 1)).toBe(false);
     expect(grid.canPlace({ char: '兵', kind: 'group' }, 0, 1)).toBe(false);
 
+    const groupedInfantry = new Tower('兵', 1, 1, 0, 'base');
+    groupedInfantry.group = { name: '测试英雄组' };
+    expect(grid.canPlace(groupedInfantry, 0, 1)).toBe(false);
+
     grid.get(0, 1).tower = { char: '兵', kind: 'base' };
     expect(grid.canPlace({ char: '兵', kind: 'base' }, 0, 1)).toBe(false);
   });
@@ -36,6 +65,92 @@ describe('road deployment legality', () => {
 
     expect(grid.canPlace({ char: '骑', kind: 'base' }, 1, 0)).toBe(true);
     expect(grid.canPlace({ char: '骑', kind: 'base' }, 0, 0)).toBe(false);
+  });
+});
+
+describe('BattleScene blocker ownership integration', () => {
+  it('leaves bar, grid, and tower collection unchanged for an invalid road drop', () => {
+    const scene = minimalScene();
+    const item = { char: '骑', kind: 'base', tier: 1, level: 1, xp: 0 };
+    const road = scene.grid.get(0, 1);
+    scene.bar.slots[0] = item;
+    scene.drag = {
+      source: 'slot', index: 0, char: item.char, kind: item.kind,
+      moved: true, x: 0, y: 0, downX: 0, downY: 0,
+    };
+    const destination = cellCenter(0, 1);
+
+    scene.onPointerUp(destination.x, destination.y);
+
+    expect(scene.bar.slots[0]).toBe(item);
+    expect(road.tower).toBe(null);
+    expect(scene.towers).toEqual([]);
+  });
+
+  it('moves and swaps road infantry with exact grid and collection ownership', () => {
+    const scene = minimalScene();
+    const firstRoad = scene.grid.get(0, 1);
+    const secondRoad = scene.grid.get(1, 1);
+    const active = scene.grid.get(1, 0);
+    const source = roadInfantry(1, 0, 1);
+    const destination = new Tower('兵', 2, 1, 0, 'base');
+    firstRoad.tower = source;
+    active.tower = destination;
+    scene.towers.push(source, destination);
+
+    scene.drag = { source: 'tower', tower: source, moved: true };
+    let point = cellCenter(1, 1);
+    scene.onPointerUp(point.x, point.y);
+
+    expect(firstRoad.tower).toBe(null);
+    expect(secondRoad.tower).toBe(source);
+    expect(source.blocking).toBe(true);
+    expect(scene.towers).toEqual([source, destination]);
+
+    scene.drag = { source: 'tower', tower: source, moved: true };
+    point = cellCenter(1, 0);
+    scene.onPointerUp(point.x, point.y);
+
+    expect(secondRoad.tower).toBe(destination);
+    expect(active.tower).toBe(source);
+    expect(source.blocking).toBe(false);
+    expect(destination.blocking).toBe(true);
+    expect([source.c, source.r]).toEqual([1, 0]);
+    expect([destination.c, destination.r]).toEqual([1, 1]);
+    expect(scene.towers).toEqual([source, destination]);
+  });
+
+  it('removes a lethally attacked blocker and releases its enemy for the next update', () => {
+    const scene = minimalScene();
+    const blocker = roadInfantry();
+    const enemy = enemyAt(100, 10000);
+    scene.grid.get(0, 1).tower = blocker;
+    scene.towers.push(blocker);
+    scene.enemies.push(enemy);
+    scene.over = false;
+    scene.paused = false;
+    scene.speed = 1;
+    scene.elapsed = 0;
+    scene.actives = [];
+    scene.wave = 1;
+    scene.waveState = 'wave';
+    scene.spawnQueue = [];
+    scene.spawnIndex = 0;
+    scene.score = { wave: 0 };
+    scene.itemBuffs = { atk: 0, spd: 0 };
+    scene.unitGear = {};
+    scene.bar.update = () => {};
+
+    const blockedAt = enemy.dist;
+    scene.update(1);
+
+    expect(scene.grid.get(0, 1).tower).toBe(null);
+    expect(scene.towers).toEqual([]);
+    expect(enemy.blocker).toBe(null);
+    expect(enemy.dist).toBe(blockedAt);
+
+    scene.update(0.1);
+    expect(enemy.dist).toBeGreaterThan(blockedAt);
   });
 });
 
