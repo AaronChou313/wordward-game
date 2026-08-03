@@ -20,7 +20,7 @@ describe('finite advanced-character pool', () => {
     const pool = createCharPool([
       '精', '铁', '神', '烈', '谋',
       '赵', '云', '吕', '布', '关', '羽', '诸', '葛', '亮', '张', '飞', '曹', '操',
-    ]);
+    ], () => 0);
 
     expect(pool.remainingTotal()).toBe(28);
     expect(pool.snapshot()).toEqual({
@@ -37,6 +37,20 @@ describe('finite advanced-character pool', () => {
       '羽': { initial: 2, remaining: 2 },
       '诸': { initial: 1, remaining: 1 },
     });
+  });
+
+  it('does not permanently starve characters appended by a save migration', () => {
+    const legacyOrder = [
+      '精', '铁', '神', '烈', '谋',
+      '赵', '云', '吕', '布', '诸', '葛', '亮', '关', '羽', '张', '飞',
+      '曹', '操', '周', '瑜', '马', '超', '黄', '忠', '貂', '蝉', '孙', '尚', '香',
+      '虎', '盾', '火', '军',
+    ];
+
+    const pool = createCharPool(legacyOrder, () => 0.9);
+
+    expect(pool.remainingTotal()).toBeLessThanOrEqual(28);
+    expect(Object.keys(pool.snapshot())).toEqual(expect.arrayContaining(['虎', '盾', '火', '军']));
   });
 
   it('draws a selected copy once and never returns exhausted characters', () => {

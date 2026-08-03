@@ -13,6 +13,8 @@ export const BASE_UNITS = {
 export const ADV_CHARS = {
   '精': { color: '#e8c35a' }, '铁': { color: '#a8a8b8' }, '神': { color: '#e8c35a' },
   '烈': { color: '#e0704a' }, '谋': { color: '#7fc7c0' },
+  '虎': { color: '#e49a45' }, '盾': { color: '#8aa0ad' },
+  '火': { color: '#e46038' }, '军': { color: '#9aac68' },
   '赵': { color: '#e8c35a' }, '云': { color: '#e8c35a' },
   '吕': { color: '#e8c35a' }, '布': { color: '#e8c35a' },
   '诸': { color: '#e8c35a' }, '葛': { color: '#e8c35a' }, '亮': { color: '#e8c35a' },

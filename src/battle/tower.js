@@ -4,10 +4,18 @@ import { HEROES } from '../config/words.js';
 import { CELL, cellCenter } from '../config/map.js';
 import { Audio } from '../core/audio.js';
 import { blockStats } from './blocking.js';
-import { applySlowEffect } from './enemy.js';
+import { applyBurnEffect, applySlowEffect } from './enemy.js';
 
 export function damageForTarget(damage, target, itemBuffs = {}) {
   return target.type === 'boss' ? damage * (1 + (itemBuffs.bossDamage || 0)) : damage;
+}
+
+export function firstHitDamage(tower, target, damage, bonus = 0) {
+  if (bonus <= 0) return damage;
+  if (!tower.firstHitTargets) tower.firstHitTargets = new WeakSet();
+  if (tower.firstHitTargets.has(target)) return damage;
+  tower.firstHitTargets.add(target);
+  return damage * (1 + bonus);
 }
 
 export class Tower {
@@ -36,6 +44,7 @@ export class Tower {
     this.blockedEnemies = [];
     this.blockHitFlash = 0;
     this.blockBuffs = {};
+    this.firstHitTargets = new WeakSet();
     const pos = cellCenter(c, r);
     this.x = pos.x; this.y = pos.y;
   }
@@ -65,6 +74,9 @@ export class Tower {
       crit: (this.buffs.crit || 0) + (w.crit || 0),
       critMul: this.buffs.critMul || 2,
       slowAura: this.buffs.slowAura || 0,
+      firstHit: this.buffs.firstHit || 0,
+      burnDamage: this.buffs.burnDamage || 0,
+      burnDuration: this.buffs.burnDuration || 0,
       skill: b.skill || null,
     };
   }
@@ -100,11 +112,28 @@ export class Tower {
 
   refillBlocker() {
     if (!this.blocking) return false;
-    const stats = blockStats(this.tier, this.level, this.blockBuffs);
+    const stats = this.currentBlockStats();
     this.blockMaxHp = stats.maxHp;
     this.blockHp = stats.maxHp;
     this.blockCapacity = stats.capacity;
     return true;
+  }
+
+  syncBlockerStats() {
+    if (!this.blocking) return false;
+    const healthRatio = this.blockMaxHp > 0 ? this.blockHp / this.blockMaxHp : 1;
+    const stats = this.currentBlockStats();
+    this.blockMaxHp = stats.maxHp;
+    this.blockHp = Math.round(stats.maxHp * healthRatio);
+    this.blockCapacity = stats.capacity;
+    return true;
+  }
+
+  currentBlockStats() {
+    return blockStats(this.tier, this.level, {
+      blockerHp: (this.blockBuffs.blockerHp || 0) + (this.buffs.blockerHp || 0),
+      blockerCapacity: (this.blockBuffs.blockerCapacity || 0) + (this.buffs.blockerCapacity || 0),
+    });
   }
 
   takeBlockDamage(damage) {
@@ -177,13 +206,16 @@ export class Tower {
     const aoePx = s.aoe * CELL;
     const hurt = (e, d) => {
       if (e.dead) return;
-      const targetDamage = damageForTarget(d, e, ctx2.itemBuffs);
+      let targetDamage = damageForTarget(d, e, ctx2.itemBuffs);
+      targetDamage = firstHitDamage(this, e, targetDamage, s.firstHit);
       const died = e.takeDamage(targetDamage);
       effects.damageText(e.x, e.y - 30, String(Math.round(targetDamage)), crit ? '#ff9a3a' : '#ffdf6a', crit ? 34 : 26);
       if (died) {
         effects.burst(e.x, e.y, '#8a6aa8', 14);
         Audio.kill();
         onKill(e, this);
+      } else if (s.burnDamage > 0 && s.burnDuration > 0) {
+        applyBurnEffect(e, this, s.burnDuration, targetDamage * s.burnDamage);
       }
     };
 

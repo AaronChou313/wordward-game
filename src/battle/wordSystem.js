@@ -53,13 +53,28 @@ export function rescan(grid, towers, groups, effects) {
       if (!cell || !cell.tower) continue;
       const target = cell.tower;
       if (target.kind !== 'base') continue;
-      for (const k in buff) {
-        if (k === 'label') continue;
-        target.buffs[k] = (target.buffs[k] || 0) + buff[k];
+      for (const [key, value] of Object.entries(buff.effects)) {
+        target.buffs[key] = (target.buffs[key] || 0) + value;
       }
       if (!target.buffChars.includes(t.char)) target.buffChars.push(t.char);
       t.flash = 0.5;
     }
+  }
+
+  // 5. 军阵光环：被“军”强化的基础将士把伤害增益传给四邻基础友军。
+  for (const source of towers) {
+    const aura = source.buffs.adjacentAura || 0;
+    if (source.kind !== 'base' || aura <= 0) continue;
+    for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const neighbor = grid.get(source.c + dc, source.r + dr);
+      const target = neighbor && neighbor.tower;
+      if (!target || target === source || target.kind !== 'base') continue;
+      target.buffs.damage = (target.buffs.damage || 0) + aura;
+    }
+  }
+
+  for (const tower of towers) {
+    if (tower.blocking && tower.syncBlockerStats) tower.syncBlockerStats();
   }
 
   return formed;

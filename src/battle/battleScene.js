@@ -700,7 +700,12 @@ export class BattleScene {
           if (this.selected === blocker) this.selected = null;
           this.removeTower(blocker);
         },
+        onBurnDamage: (enemy, damage) => {
+          this.effects.damageText(enemy.x, enemy.y - 48, String(Math.round(damage)), '#ff8050', 21);
+        },
+        onBurnKill: (enemy, source) => this.handleKill(enemy, source),
       });
+      if (e.dead) continue;
       this.updateEnemySkill(e, dt);
       if (e.reached && !e.dead) {
         e.dead = true;

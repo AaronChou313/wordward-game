@@ -31,6 +31,31 @@ export function advanceSlowEffects(enemy, dt) {
   syncSlowState(enemy);
 }
 
+export function applyBurnEffect(enemy, source, duration, dps) {
+  const current = enemy.burn;
+  if (!current || dps >= current.dps) {
+    enemy.burn = {
+      source,
+      timer: Math.max(current ? current.timer : 0, duration),
+      dps,
+    };
+  } else {
+    current.timer = Math.max(current.timer, duration);
+  }
+}
+
+export function advanceBurnEffect(enemy, dt) {
+  if (!enemy.burn || enemy.dead) return { damage: 0, killed: false, source: null };
+  const burn = enemy.burn;
+  const elapsed = Math.min(dt, burn.timer);
+  const damage = Math.min(enemy.hp, burn.dps * elapsed);
+  burn.timer = Math.max(0, burn.timer - dt);
+  const killed = damage > 0 ? enemy.takeDamage(damage) : false;
+  const result = { damage, killed, source: burn.source };
+  if (killed || burn.timer <= 1e-9) enemy.burn = null;
+  return result;
+}
+
 export class Enemy {
   constructor(hp, speedCells) {
     const descriptor = typeof hp === 'object' ? hp : null;
@@ -52,6 +77,7 @@ export class Enemy {
     this.slowTimer = 0;
     this.slowFactor = 1;
     this.slowEffects = {};
+    this.burn = null;
     this.dead = false;
     this.reached = false;
     this.blocker = null;
@@ -74,6 +100,12 @@ export class Enemy {
 
   update(dt, context = {}) {
     advanceSlowEffects(this, dt);
+    const burn = advanceBurnEffect(this, dt);
+    if (burn.damage > 0 && context.onBurnDamage) context.onBurnDamage(this, burn.damage);
+    if (burn.killed) {
+      if (context.onBurnKill) context.onBurnKill(this, burn.source);
+      return;
+    }
     if (this.blockAttackFlash > 0) this.blockAttackFlash -= dt;
     if (context.holdPosition && !this.blocker) return;
     if (this.blocker && this.blocker.blocking && !this.blocker.dead) {

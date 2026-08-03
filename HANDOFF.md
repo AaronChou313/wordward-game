@@ -4,7 +4,7 @@
 
 This repository is a Three Kingdoms-themed Chinese character tower-defense game. It runs entirely in the browser with Vite, plain ES modules, and Canvas 2D. The current handoff branch is `feature/gameplay-overhaul`, based on `master`, and the remote is `git@github.com:AaronChou313/wordward-game.git`.
 
-The battle-core milestone is implemented and reviewed. Progression Tasks 1–2 (data-driven dual-pity gacha and differentiated active/passive items) are implemented and independently reviewed; Progression Tasks 3–6 and the online account/ranking milestone remain. Do not assume the original 13-item request is complete until those plans are finished.
+The battle-core milestone is implemented and reviewed. Progression Tasks 1–3 (data-driven dual-pity gacha, differentiated active/passive items, and expanded advanced-character strategies) are implemented and independently reviewed; Progression Tasks 4–6 and the online account/ranking milestone remain. Do not assume the original 13-item request is complete until those plans are finished.
 
 ## Technology and Commands
 
@@ -16,7 +16,7 @@ The battle-core milestone is implemented and reviewed. Progression Tasks 1–2 (
 - Production build: `npm run build`
 - Preview build: `npm run preview`
 
-Latest verified result before this handoff: 11 test files, 111 tests passed; Vite production build passed with 47 transformed modules; `git diff --check` was clean.
+Latest verified result before this handoff: 12 test files, 119 tests passed; Vite production build passed with 47 transformed modules; `git diff --check` was clean.
 
 ## Repository Layout
 
@@ -61,8 +61,8 @@ Implement [the progression plan](docs/superpowers/plans/2026-08-03-progression-s
 
 1. Completed: data-driven gacha with published base/next-draw reward rates, persistent 10-pull rare guarantee, and 50-pull precious guarantee.
 2. Completed: stronger active/passive item identities and additional tactical items.
-3. Next: additional advanced characters/word combinations with unique strategic roles.
-4. Clickable codex detail panels for units, words, items, elites, and Bosses.
+3. Completed: additional advanced characters/word combinations with unique strategic roles.
+4. Next: clickable codex detail panels for units, words, items, elites, and Bosses.
 5. Shop inventory containing up to four unique unowned items, refreshed only after battle settlement; upgrades remain in inventory.
 6. Full progression regression pass.
 
@@ -93,6 +93,19 @@ The commit subject is `feat: differentiate active and passive items`. The implem
 - Distinct active/passive inventory colors, headings, slot counts, usage hints, and draggable vertical scrolling.
 
 Automated verification covers schema identity, all active dispatch paths and cooldown behavior, passive aggregation and combat hooks, independent slow timing, save normalization, inventory presentation, and refresh-bar filling. Manual Canvas QA activated all five active items, confirmed the active/passive card treatment, and found no browser console errors. Independent review reported no Critical or Important issues; a non-blocking hardening candidate remains to deduplicate and cap active entries in deliberately corrupted saves.
+
+## Completed: Progression Task 3
+
+The commit subject is `feat: expand advanced character strategies`. The implementation adds:
+
+- Four finite-pool prefix characters with complete effects and codex metadata: `虎` doubles each tower's first hit per enemy, `盾` strengthens blocker health/capacity, `火` applies attributed damage over time, and `军` makes an adjacent base unit strengthen its four-neighbor base allies.
+- A structured prefix schema with labels, descriptions, colors, pool classification, codex hints, and numeric effects; all five original prefixes use the same schema without changing their behavior.
+- Burn processing in the enemy update phase, including unified kill rewards and Boss settlement through the existing idempotent `handleKill()` path.
+- Blocker-stat synchronization that preserves current health ratio when a shield word connects or disconnects.
+- Overflow-pool rotation with injectable randomness, preserving complete 3/2/1 character allocations and the 28-copy cap while preventing migrated saves from permanently starving newly appended characters.
+- Consistency tests proving every advanced character participates in a prefix or hero combination and every hero references defined characters.
+
+Canvas QA formed all four new combinations. `盾兵` visibly raised capacity from 1 to 2, and a `军` formation raised an adjacent archer's displayed attack from 14 to 17 after rounding; no browser warnings or errors were reported. Independent review reported no Critical or Important issues after the overflow-pool fix. Non-blocking Task 6 candidates are an explicit shield-disconnect regression and an integration assertion that a lethal burn settles kill rewards and Boss merit exactly once.
 
 ## Remaining Milestone 2: Accounts and Ranking
 
@@ -147,6 +160,7 @@ Then read `AGENTS.md`, this file, the approved specs, and the next implementatio
 - Development branch: `feature/gameplay-overhaul`
 - Battle-core integration fixes culminate at `2524fc2`; legacy endless migration fixes follow it.
 - Progression Task 1 is commit `2b2227e` (`feat: add transparent dual-pity gacha`).
-- Progression Task 2 uses the focused commit subject `feat: differentiate active and passive items`; use `git log` for its immutable hash after checkout.
+- Progression Task 2 is commit `e1daa09` (`feat: differentiate active and passive items`).
+- Progression Task 3 uses the focused commit subject `feat: expand advanced character strategies`; use `git log` for its immutable hash after checkout.
 - The `.superpowers/` execution ledger and agent reports are intentionally ignored and will not be available after cloning. The tracked specs, plans, tests, commits, and this handoff are the durable record.
 - No pull request was created during this handoff. Confirm the branch on GitHub after push before switching devices.

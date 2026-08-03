@@ -1,12 +1,27 @@
 // 词组配置：前缀强化词 + 典故人名词（参考王者荣耀三国英雄）
 // 前缀字与基础兵种横竖相邻即生效，断开失效
 export const PREFIX_BUFFS = {
-  '精': { atkSpeed: 0.4,  label: '精·攻速+40%' },
-  '铁': { range: 0.5,     label: '铁·射程+50%' },
-  '神': { crit: 0.35, critMul: 2.0, label: '神·35%暴击' },
-  '烈': { damage: 0.5, aoe: 0.3, label: '烈·伤害+50%' },
-  '谋': { slowAura: 0.25, label: '谋·减速光环' },
+  '精': prefix('精·攻速+40%', '提升相邻将士的攻击速度。', '#e8c35a', { atkSpeed: 0.4 }),
+  '铁': prefix('铁·射程+50%', '提升相邻将士的攻击射程。', '#a8a8b8', { range: 0.5 }),
+  '神': prefix('神·35%暴击', '使相邻将士有概率造成双倍伤害。', '#f0ce5a', { crit: 0.35, critMul: 2.0 }),
+  '烈': prefix('烈·伤害+50%', '强化相邻将士的伤害与范围。', '#e0704a', { damage: 0.5, aoe: 0.3 }),
+  '谋': prefix('谋·减速光环', '使相邻将士持续减速射程内敌军。', '#7fc7c0', { slowAura: 0.25 }),
+  '虎': prefix('虎·首击伤害+100%', '相邻将士首次命中每名敌军时造成爆发伤害。', '#e49a45', { firstHit: 1 }),
+  '盾': prefix('盾·阻挡生命+50% 容量+1', '强化相邻兵字的阻挡生命与容量。', '#8aa0ad', { blockerHp: 0.5, blockerCapacity: 1 }),
+  '火': prefix('火·灼烧3秒', '相邻将士命中后附加持续灼烧。', '#e46038', { burnDamage: 0.25, burnDuration: 3 }),
+  '军': prefix('军·邻军伤害+20%', '相邻将士成为军阵核心，强化其四邻友军。', '#9aac68', { adjacentAura: 0.2 }),
 };
+
+function prefix(label, description, color, effects) {
+  return {
+    label,
+    description,
+    color,
+    pool: 'prefix',
+    effects,
+    codex: { hint: '通过招募解锁后，将该字部署在基础将士相邻格。' },
+  };
+}
 
 // 人名词：相邻拼出名字后融合为英雄单位
 export const HEROES = {

@@ -20,16 +20,28 @@ function copiesFor(char) {
   return 0;
 }
 
-export function createCharPool(unlockedChars) {
+export function createCharPool(unlockedChars, random = Math.random) {
   const initial = {};
   const copies = [];
   const seen = new Set();
+  const candidates = [];
 
   for (const char of unlockedChars || []) {
     if (seen.has(char) || !ADV_CHARS[char]) continue;
     seen.add(char);
     const quantity = copiesFor(char);
-    if (quantity === 0 || copies.length + quantity > POOL_CAP) continue;
+    if (quantity > 0) candidates.push({ char, quantity });
+  }
+
+  const requestedCopies = candidates.reduce((total, candidate) => total + candidate.quantity, 0);
+  let ordered = candidates;
+  if (requestedCopies > POOL_CAP && candidates.length > 0) {
+    const start = Math.min(candidates.length - 1, Math.floor(random() * candidates.length));
+    ordered = candidates.slice(start).concat(candidates.slice(0, start));
+  }
+
+  for (const { char, quantity } of ordered) {
+    if (copies.length + quantity > POOL_CAP) continue;
     initial[char] = quantity;
     for (let i = 0; i < quantity; i++) copies.push(char);
   }
