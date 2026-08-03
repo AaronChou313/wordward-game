@@ -4,7 +4,7 @@
 
 This repository is a Three Kingdoms-themed Chinese character tower-defense game. It runs entirely in the browser with Vite, plain ES modules, and Canvas 2D. The current handoff branch is `feature/gameplay-overhaul`, based on `master`, and the remote is `git@github.com:AaronChou313/wordward-game.git`.
 
-The battle-core milestone is implemented and reviewed. Progression Tasks 1–4 (dual-pity gacha, differentiated items, expanded advanced-character strategies, and detailed codex panels) are implemented and independently reviewed; Progression Tasks 5–6 and the online account/ranking milestone remain. Do not assume the original 13-item request is complete until those plans are finished.
+The battle-core milestone is implemented and reviewed. Progression Tasks 1–5 (dual-pity gacha, differentiated items, advanced-character strategies, detailed codex panels, and rotating shop stock) are implemented and independently reviewed; Progression Task 6 and the online account/ranking milestone remain. Do not assume the original 13-item request is complete until those plans are finished.
 
 ## Technology and Commands
 
@@ -16,7 +16,7 @@ The battle-core milestone is implemented and reviewed. Progression Tasks 1–4 (
 - Production build: `npm run build`
 - Preview build: `npm run preview`
 
-Latest verified result before this handoff: 13 test files, 128 tests passed; Vite production build passed with 48 transformed modules; `git diff --check` was clean.
+Latest verified result before this handoff: 14 test files, 135 tests passed; Vite production build passed with 49 transformed modules; `git diff --check` was clean.
 
 ## Repository Layout
 
@@ -63,8 +63,8 @@ Implement [the progression plan](docs/superpowers/plans/2026-08-03-progression-s
 2. Completed: stronger active/passive item identities and additional tactical items.
 3. Completed: additional advanced characters/word combinations with unique strategic roles.
 4. Completed: clickable codex detail panels for units, words, items, elites, and Bosses.
-5. Next: shop inventory containing up to four unique unowned items, refreshed only after battle settlement; upgrades remain in inventory.
-6. Full progression regression pass.
+5. Completed: shop inventory containing up to four unique unowned items, refreshed only after battle settlement; upgrades remain in inventory.
+6. Next: full progression regression pass.
 
 ## Completed: Progression Task 1
 
@@ -119,6 +119,19 @@ The commit subject is `feat: add detailed codex attributes`. The implementation 
 - Conservative migration for older saves: missing enemy encounter arrays become empty instead of inferring identities from an ambiguous highest-wave record.
 
 Canvas QA verified six-category scrolling, a complete unlocked `虎` panel, a locked `震地校尉` hint-only panel, close-and-return scroll retention, and a clean browser console. Independent review reported no Critical or Important issues after encounter identity persistence was added. A non-blocking coverage candidate remains to drive `BattleScene.update()` directly while asserting the first special spawn persists exactly once; the current pure identity and random-selection integration paths are covered.
+
+## Completed: Progression Task 5
+
+The commit subject is `feat: add rotating four-item shop`. The implementation adds:
+
+- Injectable Fisher–Yates selection of up to four unique unowned items, with correct behavior when fewer than four remain.
+- Persisted `shop.initialized` state that distinguishes a never-generated first stock from an initialized stock that the player has bought empty.
+- Stable inventory across repeated shop visits; purchases remove one item without immediate replacement, and externally acquired stock entries are filtered without backfilling.
+- A four-card active/passive shop UI with level-one descriptions and purchase-only controls. Item upgrades, equipment, and sales remain exclusively in the inventory.
+- Removal of the shop's random advanced-character purchase path.
+- Stock refresh inside the idempotent `gameOver()` settlement path, covering both defeat and voluntary exit while excluding already owned items.
+
+Canvas QA verified stable repeated visits, a 4-to-3 purchase without replacement, a new four-item stock after voluntary battle exit, exclusion of the purchased item, and a clean browser console. Independent review reported no Critical or Important issues. Task 6 should add explicit regressions for repeated `gameOver()`, migration of initialized empty/non-empty stocks, and the acquire-then-filter/sell-without-backfill lifecycle.
 
 ## Remaining Milestone 2: Accounts and Ranking
 
@@ -175,6 +188,7 @@ Then read `AGENTS.md`, this file, the approved specs, and the next implementatio
 - Progression Task 1 is commit `2b2227e` (`feat: add transparent dual-pity gacha`).
 - Progression Task 2 is commit `e1daa09` (`feat: differentiate active and passive items`).
 - Progression Task 3 is commit `802eece` (`feat: expand advanced character strategies`).
-- Progression Task 4 uses the focused commit subject `feat: add detailed codex attributes`; use `git log` for its immutable hash after checkout.
+- Progression Task 4 is commit `0a8cd8c` (`feat: add detailed codex attributes`).
+- Progression Task 5 uses the focused commit subject `feat: add rotating four-item shop`; use `git log` for its immutable hash after checkout.
 - The `.superpowers/` execution ledger and agent reports are intentionally ignored and will not be available after cloning. The tracked specs, plans, tests, commits, and this handoff are the durable record.
 - No pull request was created during this handoff. Confirm the branch on GitHub after push before switching devices.

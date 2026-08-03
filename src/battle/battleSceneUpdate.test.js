@@ -15,6 +15,8 @@ describe('BattleScene defeat ordering', () => {
     save.merit = { total: 0, claimed: {} };
     save.diff.unlocked = ['easy'];
     save.diff.best = {};
+    save.items.owned = {};
+    save.shop = { initialized: true, stock: [] };
 
     const scene = new BattleScene({});
     scene.diff = { id: 'easy', coinMul: 1, dropMul: 0 };
@@ -74,5 +76,28 @@ describe('BattleScene defeat ordering', () => {
     expect(boss.bossDefeatHandled).toBeUndefined();
     expect(save.merit).toEqual({ total: 0, claimed: {} });
     expect(save.diff.unlocked).toEqual(['easy']);
+    expect(save.shop.stock).toHaveLength(4);
+    expect(new Set(save.shop.stock).size).toBe(4);
+  });
+
+  it('refreshes shop stock when a battle is settled voluntarily', () => {
+    const save = getSave();
+    save.gold = 0;
+    save.bestWave = 0;
+    save.diff.best = {};
+    save.items.owned = {};
+    save.shop = { initialized: true, stock: [] };
+
+    const scene = new BattleScene({});
+    scene.over = false;
+    scene.score = new Score();
+    scene.diff = { id: 'easy', coinMul: 1 };
+    scene.itemBuffs = { coin: 0 };
+
+    scene.gameOver();
+
+    expect(scene.over).toBe(true);
+    expect(save.shop.stock).toHaveLength(4);
+    expect(new Set(save.shop.stock).size).toBe(4);
   });
 });

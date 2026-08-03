@@ -27,6 +27,7 @@ import { Toast } from '../ui/toast.js';
 import { Audio } from '../core/audio.js';
 import { getSave, addGold, persist, grantEquip, equipByUid } from '../meta/saveData.js';
 import { recordCodexEncounter } from '../meta/codexDetails.js';
+import { refreshShopAfterBattle } from '../meta/shopStock.js';
 
 // 顶部按钮行
 const TOP_Y = 64, TOP_H = 56;
@@ -798,6 +799,7 @@ export class BattleScene {
     if (this.score.wave > (save.diff.best[bestKey] || 0)) {
       save.diff.best[bestKey] = this.score.wave;
     }
+    refreshShopAfterBattle(save);
     persist();
   }
 

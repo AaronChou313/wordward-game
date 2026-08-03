@@ -16,7 +16,7 @@ const DEFAULT_SAVE = {
   codex: { base: [], prefix: [], hero: [], elite: [], boss: [] },
   merit: { total: 0, claimed: {} },
   gacha: { smallPity: 0, bigPity: 0, history: [] },
-  shop: { stock: [] },
+  shop: { stock: [], initialized: false },
 };
 
 let data = null;

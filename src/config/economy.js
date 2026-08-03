@@ -12,8 +12,5 @@ export const coinsFor = (wave, kills) => wave * 10 + kills;
 // 抽奖
 export const GACHA_COST = 100;
 
-// 商城直接购买进阶字（随机未解锁）
-export const SHOP_CHAR_COST = 150;
-
 // 出售返还比例
 export const SELL_RATIO = 0.5;
