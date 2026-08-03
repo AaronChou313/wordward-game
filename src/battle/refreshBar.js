@@ -65,6 +65,16 @@ export class RefreshBar {
     for (let i = 0; i < REFRESH_SLOTS; i++) this.slots[i] = this.pullOne();
   }
 
+  fillEmpty() {
+    let filled = 0;
+    for (let i = 0; i < REFRESH_SLOTS; i++) {
+      if (this.slots[i]) continue;
+      this.slots[i] = this.pullOne();
+      filled++;
+    }
+    return filled;
+  }
+
   take(i) {
     const item = this.slots[i];
     if (item) this.slots[i] = null;

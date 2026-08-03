@@ -5,12 +5,14 @@ import { PATH_TOTAL } from './path.js';
 const pathIndexByCell = new Map(PATH.map(([c, r], index) => [c + ',' + r, index]));
 const interceptionTolerance = BLOCKING.interceptToleranceCells * CELL;
 
-export function blockStats(tier, level) {
+export function blockStats(tier, level, itemBuffs = {}) {
+  const capacityBonus = itemBuffs.blockerCapacity || 0;
   return {
     maxHp: Math.round(BLOCKING.baseHp
       * BLOCKING.tierHpMul ** (tier - 1)
-      * (1 + BLOCKING.levelHpStep * (level - 1))),
-    capacity: Math.min(BLOCKING.maxCapacity, 1 + Math.floor((tier - 1) / 2)),
+      * (1 + BLOCKING.levelHpStep * (level - 1))
+      * (1 + (itemBuffs.blockerHp || 0))),
+    capacity: Math.min(BLOCKING.maxCapacity, 1 + Math.floor((tier - 1) / 2)) + capacityBonus,
   };
 }
 

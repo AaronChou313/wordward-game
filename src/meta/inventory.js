@@ -6,13 +6,29 @@ import { Audio } from '../core/audio.js';
 import { ITEMS, MAX_ACTIVE, MAX_PASSIVE, upgradeCost, sellPrice } from '../config/items.js';
 import { getSave, spendGold, addGold, persist } from './saveData.js';
 
+export function inventoryItemPresentation(item, level) {
+  const active = item.kind === 'active';
+  return {
+    border: active ? '#c98ab8' : '#79b8a8',
+    heading: active
+      ? `主动战术 · ${item.castMode === 'target' ? '拖拽施放' : '点击施放'}`
+      : '被动军略 · 持续生效',
+    detail: item.descAt(level),
+  };
+}
+
 export class InventoryScene {
   constructor(scenes) {
     this.scenes = scenes;
     this.btnBack = new Button(39, 40, 140, 56, '返回', () => { Audio.click(); scenes.switch('home'); }, { fontSize: 26 });
+    this.scroll = 0;
+    this.press = null;
   }
 
-  enter() {}
+  enter() {
+    this.scroll = 0;
+    this.press = null;
+  }
 
   ownedIds() {
     return Object.keys(getSave().items.owned);
@@ -78,18 +94,37 @@ export class InventoryScene {
 
   onPointerDown(x, y) {
     if (this.btnBack.hitTest(x, y)) return this.btnBack.onClick();
+    if (x >= 50 && x <= 700 && y >= 255 && y <= 1195) {
+      this.press = { x, y, scroll: this.scroll, moved: false };
+    }
+  }
+
+  onPointerMove(_x, y) {
+    if (!this.press) return;
+    if (Math.abs(y - this.press.y) > 10) this.press.moved = true;
+    if (!this.press.moved) return;
+    const next = this.press.scroll + this.press.y - y;
+    this.scroll = Math.max(0, Math.min(this.maxScroll(), next));
+  }
+
+  onPointerUp(x, y) {
+    const press = this.press;
+    this.press = null;
+    if (!press || press.moved) return;
     const ids = this.ownedIds();
     for (let i = 0; i < ids.length; i++) {
-      const rowY = 280 + i * 140;
-      if (y < rowY + 76 || y > rowY + 118) continue;
+      const rowY = 270 + i * 150 - this.scroll;
+      if (y < rowY + 96 || y > rowY + 132) continue;
       // 三个操作按钮：装备/卸下、升级、出售
       if (x >= 250 && x <= 360) return this.toggleEquip(ids[i]);
       if (x >= 372 && x <= 500) return this.upgrade(ids[i]);
       if (x >= 512 && x <= 640) return this.sell(ids[i]);
     }
   }
-  onPointerMove() {}
-  onPointerUp() {}
+
+  maxScroll() {
+    return Math.max(0, this.ownedIds().length * 150 - 900);
+  }
 
   render(ctx) {
     ctx.fillStyle = '#181209';
@@ -104,9 +139,11 @@ export class InventoryScene {
     ctx.font = '30px KaiTi, STKaiti, serif';
     ctx.fillText('金币 ' + s.gold, 700, 70);
     ctx.textAlign = 'left';
-    ctx.fillStyle = '#a8895a';
-    ctx.font = '22px KaiTi, STKaiti, serif';
-    ctx.fillText(`已装备：主动 ${s.items.equippedActive.length}/${MAX_ACTIVE} · 被动 ${s.items.equippedPassive.length}/${MAX_PASSIVE}`, 60, 210);
+    ctx.fillStyle = '#c98ab8';
+    ctx.font = '20px KaiTi, STKaiti, serif';
+    ctx.fillText(`主动战术 ${s.items.equippedActive.length}/${MAX_ACTIVE} · 点击/拖拽后在战斗中施放`, 60, 205);
+    ctx.fillStyle = '#79b8a8';
+    ctx.fillText(`被动军略 ${s.items.equippedPassive.length}/${MAX_PASSIVE} · 装备后持续生效，无需操作`, 60, 235);
     ctx.restore();
 
     const ids = this.ownedIds();
@@ -120,31 +157,37 @@ export class InventoryScene {
     }
 
     ctx.save();
+    ctx.beginPath();
+    ctx.rect(50, 255, 650, 940);
+    ctx.clip();
+    ctx.translate(0, -this.scroll);
     ids.forEach((id, i) => {
-      const y = 280 + i * 140;
+      const y = 270 + i * 150;
       const item = ITEMS[id];
       const lvl = s.items.owned[id];
       const equipped = this.isEquipped(id);
-      ctx.fillStyle = 'rgba(50, 38, 24, 0.7)';
-      ctx.fillRect(60, y, 621, 124);
-      ctx.strokeStyle = equipped ? '#e8c35a' : '#6a5232';
+      const presentation = inventoryItemPresentation(item, lvl);
+      ctx.fillStyle = item.kind === 'active' ? 'rgba(58, 30, 48, 0.72)' : 'rgba(27, 53, 48, 0.72)';
+      ctx.fillRect(60, y, 621, 136);
+      ctx.strokeStyle = equipped ? '#ffd75a' : presentation.border;
       ctx.lineWidth = equipped ? 3 : 1;
-      ctx.strokeRect(60, y, 621, 124);
+      ctx.strokeRect(60, y, 621, 136);
 
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = '#f0d8a8';
-      ctx.font = '28px KaiTi, STKaiti, serif';
-      ctx.fillText(item.name + ' Lv' + lvl, 80, y + 30);
+      ctx.font = '26px KaiTi, STKaiti, serif';
+      ctx.fillText(item.name + ' Lv' + lvl, 80, y + 24);
+      ctx.fillStyle = presentation.border;
+      ctx.font = '18px KaiTi, STKaiti, serif';
+      ctx.fillText(presentation.heading, 80, y + 52);
       ctx.fillStyle = '#a8895a';
-      ctx.font = '20px KaiTi, STKaiti, serif';
-      const kindLabel = item.kind === 'active' ? '主动' : '被动';
-      ctx.fillText('【' + kindLabel + '】' + item.descAt(lvl), 80, y + 60);
+      ctx.fillText(presentation.detail, 80, y + 76);
 
       // 按钮组
-      this.drawOp(ctx, 250, y + 76, 110, 42, equipped ? '卸下' : '装备', '#3a4a2a');
-      this.drawOp(ctx, 372, y + 76, 128, 42, '升 ' + upgradeCost(id, lvl) + '金', '#5a3a28');
-      this.drawOp(ctx, 512, y + 76, 128, 42, '卖 ' + sellPrice(id, lvl) + '金', '#4a2a28');
+      this.drawOp(ctx, 250, y + 96, 110, 36, equipped ? '卸下' : '装备', '#3a4a2a');
+      this.drawOp(ctx, 372, y + 96, 128, 36, '升 ' + upgradeCost(id, lvl) + '金', '#5a3a28');
+      this.drawOp(ctx, 512, y + 96, 128, 36, '卖 ' + sellPrice(id, lvl) + '金', '#4a2a28');
     });
     ctx.restore();
 

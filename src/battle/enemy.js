@@ -6,6 +6,31 @@ import { blockDamage } from './blocking.js';
 
 let nextId = 1;
 
+function syncSlowState(enemy) {
+  const effects = Object.values(enemy.slowEffects || {});
+  enemy.slowTimer = effects.reduce((longest, effect) => Math.max(longest, effect.timer), 0);
+  enemy.slowFactor = effects.reduce((strongest, effect) => Math.min(strongest, effect.factor), 1);
+}
+
+export function applySlowEffect(enemy, source, duration, factor) {
+  if (!enemy.slowEffects) enemy.slowEffects = {};
+  const current = enemy.slowEffects[source];
+  enemy.slowEffects[source] = {
+    timer: Math.max(current ? current.timer : 0, duration),
+    factor: Math.min(current ? current.factor : 1, factor),
+  };
+  syncSlowState(enemy);
+}
+
+export function advanceSlowEffects(enemy, dt) {
+  if (!enemy.slowEffects) enemy.slowEffects = {};
+  for (const [source, effect] of Object.entries(enemy.slowEffects)) {
+    effect.timer = Math.max(0, effect.timer - dt);
+    if (effect.timer <= 1e-9) delete enemy.slowEffects[source];
+  }
+  syncSlowState(enemy);
+}
+
 export class Enemy {
   constructor(hp, speedCells) {
     const descriptor = typeof hp === 'object' ? hp : null;
@@ -26,6 +51,7 @@ export class Enemy {
     this.x = 0; this.y = 0;
     this.slowTimer = 0;
     this.slowFactor = 1;
+    this.slowEffects = {};
     this.dead = false;
     this.reached = false;
     this.blocker = null;
@@ -47,7 +73,7 @@ export class Enemy {
   }
 
   update(dt, context = {}) {
-    if (this.slowTimer > 0) this.slowTimer -= dt;
+    advanceSlowEffects(this, dt);
     if (this.blockAttackFlash > 0) this.blockAttackFlash -= dt;
     if (context.holdPosition && !this.blocker) return;
     if (this.blocker && this.blocker.blocking && !this.blocker.dead) {

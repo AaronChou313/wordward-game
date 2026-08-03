@@ -1,6 +1,6 @@
 // 战斗场景：编排地图、刷怪、将士、英雄组、刷新栏、词组、道具、结算
 import { Grid } from './grid.js';
-import { advanceSkillTimer, Enemy, selectStunTargets } from './enemy.js';
+import { advanceSkillTimer, applySlowEffect, Enemy, selectStunTargets } from './enemy.js';
 import { spawnPlan } from './spawnPlan.js';
 import { Tower } from './tower.js';
 import { HeroGroup } from './heroGroup.js';
@@ -38,6 +38,89 @@ const TAP_DIST = 14;
 // 设置面板音量滑条
 const SLIDER_X = 215, SLIDER_W = 320, SLIDER_Y = 600;
 
+export const ACTIVE_ITEM_HANDLERS = {
+  'damage-all': (scene, active, item) => {
+    const damage = item.effect.damageAt(active.level);
+    for (const enemy of scene.enemies) {
+      if (enemy.dead) continue;
+      scene.effects.tracer(enemy.x, enemy.y - 80, enemy.x, enemy.y, '#ff7a3a');
+      if (enemy.takeDamage(damage)) scene.handleKill(enemy, null);
+    }
+    scene.effects.shake(8, 0.25);
+    return { used: true, message: `${item.name}：全屏灼烧！`, sound: 'boom' };
+  },
+  'refresh-bar': (scene, _active, item) => {
+    scene.bar.refresh(true);
+    return { used: true, message: `${item.name}：将士栏已刷新`, sound: 'click' };
+  },
+  'promote-target': (scene, _active, item, target) => {
+    if (!target) return { used: false, message: '请拖到将士身上使用' };
+    target.tier += item.effect.tiers;
+    target.cool = 0;
+    target.refillBlocker();
+    scene.effects.ring(target.x, target.y, '#7fe08a', 16, 280);
+    scene.effects.damageText(target.x, target.y - 56, target.tier + ' 阶!', '#7fe08a', 30);
+    scene.afterBoardChange();
+    return { used: true, message: `${item.name}：${target.char} 升至 ${target.tier} 阶`, sound: 'merge' };
+  },
+  'fill-empty-bar': (scene, _active, item) => {
+    const filled = scene.bar.fillEmpty();
+    if (filled === 0) return { used: false, message: '将士栏没有空位' };
+    return { used: true, message: `${item.name}：补充 ${filled} 名将士`, sound: 'click' };
+  },
+  'slow-all': (scene, active, item) => {
+    const enemies = scene.enemies.filter((enemy) => !enemy.dead);
+    if (enemies.length === 0) return { used: false, message: '当前没有可减速的敌军' };
+    const duration = item.effect.durationAt(active.level);
+    const factor = item.effect.factorAt(active.level);
+    for (const enemy of enemies) {
+      applySlowEffect(enemy, 'warDrum', duration, factor);
+    }
+    return { used: true, message: `${item.name}：敌军行动迟滞`, sound: 'boom' };
+  },
+};
+
+export function dispatchActiveItem(scene, active, target = null) {
+  if (!active || active.cd > 0) return { used: false, message: '道具仍在冷却' };
+  const item = ITEMS[active.id];
+  const handler = item && item.kind === 'active' && item.effect
+    ? ACTIVE_ITEM_HANDLERS[item.effect.type]
+    : null;
+  if (!handler) return { used: false, message: '道具效果不可用' };
+  const result = handler(scene, active, item, target);
+  if (result.used) active.cd = item.cooldownAt(active.level);
+  return result;
+}
+
+export function aggregatePassiveItemBuffs(equipped) {
+  const aggregate = {};
+  for (const entry of equipped || []) {
+    const item = ITEMS[entry.id];
+    if (!item || item.kind !== 'passive' || !item.buffs) continue;
+    const buffs = item.buffs(entry.level);
+    for (const [key, value] of Object.entries(buffs)) {
+      aggregate[key] = (aggregate[key] || 0) + value;
+    }
+  }
+  return aggregate;
+}
+
+export function stunDurationAfterBuffs(duration, itemBuffs = {}) {
+  return Math.max(0, duration * (1 - (itemBuffs.stunDuration || 0)));
+}
+
+export function normalizeActiveItems(equipped, owned = {}) {
+  const normalized = [];
+  for (const entry of equipped || []) {
+    const id = typeof entry === 'string' ? entry : entry && entry.id;
+    const item = ITEMS[id];
+    const ownedLevel = owned[id];
+    if (!item || item.kind !== 'active' || !Number.isFinite(ownedLevel) || ownedLevel < 1) continue;
+    normalized.push({ id, level: Math.floor(ownedLevel), cd: 0 });
+  }
+  return normalized;
+}
+
 export class BattleScene {
   constructor(scenes) {
     this.scenes = scenes;
@@ -64,13 +147,7 @@ export class BattleScene {
     this.pointer = { x: 0, y: 0 };
 
     // 被动道具加成
-    this.itemBuffs = { atk: 0, spd: 0, coin: 0 };
-    for (const eq of save.items.equippedPassive) {
-      const item = ITEMS[eq.id];
-      if (!item || !item.buffs) continue;
-      const b = item.buffs(eq.level);
-      for (const k in b) this.itemBuffs[k] = (this.itemBuffs[k] || 0) + b[k];
-    }
+    this.itemBuffs = aggregatePassiveItemBuffs(save.items.equippedPassive);
 
     // 玩家装备加成（全军/主公）
     this.lordHpBonus = 0;
@@ -93,7 +170,7 @@ export class BattleScene {
     }
 
     // 主动道具
-    this.actives = save.items.equippedActive.map((eq) => ({ id: eq.id, level: eq.level, cd: 0 }));
+    this.actives = normalizeActiveItems(save.items.equippedActive, save.items.owned);
 
     // 刷新栏
     this.charPool = createCharPool(save.unlockedChars);
@@ -217,13 +294,13 @@ export class BattleScene {
       return;
     }
 
-    // 主动道具：非指向型点击即用，指向型（练兵符）按下开始拖拽
+    // 主动道具：即时型点击使用，目标型按下后拖拽施放
     const ai = this.activeAt(x, y);
     if (ai >= 0) {
       const a = this.actives[ai];
       const item = ITEMS[a.id];
       if (a.cd > 0) return Toast.show(item.name + ' 冷却中');
-      if (!item.targeted) return this.useActive(ai);
+      if (item.castMode !== 'target') return this.useActive(ai);
       this.drag = { source: 'active', index: ai, id: a.id, x, y, downX: x, downY: y, moved: false };
       return;
     }
@@ -314,22 +391,9 @@ export class BattleScene {
     }
 
     if (drag.source === 'active') {
-      // 练兵符：落在任意将士上升 1 阶
       if (cellPos) {
         const cell = this.grid.get(cellPos.c, cellPos.r);
-        if (cell && cell.tower) {
-          const a = this.actives[drag.index];
-          const item = ITEMS[a.id];
-          cell.tower.tier++;
-          cell.tower.cool = 0;
-          cell.tower.refillBlocker();
-          a.cd = item.cooldownAt ? item.cooldownAt(a.level) : (item.cooldown || 20);
-          Audio.merge();
-          this.effects.ring(cell.tower.x, cell.tower.y, '#7fe08a', 16, 280);
-          this.effects.damageText(cell.tower.x, cell.tower.y - 56, cell.tower.tier + ' 阶!', '#7fe08a', 30);
-          Toast.show(item.name + '：' + cell.tower.char + ' 升至 ' + cell.tower.tier + ' 阶');
-          this.afterBoardChange();
-        }
+        if (cell && cell.tower) this.useActive(drag.index, cell.tower);
       }
       return;
     }
@@ -433,7 +497,7 @@ export class BattleScene {
     const tower = new Tower(item.char, item.tier || 1, c, r, item.kind);
     tower.level = item.level || 1;
     tower.xp = item.xp || 0;
-    if (this.grid.get(c, r).kind === 'path') tower.deployAsBlocker();
+    if (this.grid.get(c, r).kind === 'path') tower.deployAsBlocker(this.itemBuffs);
     this.grid.get(c, r).tower = tower;
     this.towers.push(tower);
     this.effects.ring(tower.x, tower.y, '#c9a86a', 10, 200);
@@ -492,7 +556,7 @@ export class BattleScene {
     const pos = cellCenter(c, r);
     tower.x = pos.x;
     tower.y = pos.y;
-    if (!tower.blocking && enteringRoad) tower.deployAsBlocker();
+    if (!tower.blocking && enteringRoad) tower.deployAsBlocker(this.itemBuffs);
   }
 
   afterBoardChange() {
@@ -512,26 +576,13 @@ export class BattleScene {
     return -1;
   }
 
-  useActive(i) {
+  useActive(i, target = null) {
     const a = this.actives[i];
     if (a.cd > 0) return;
-    const item = ITEMS[a.id];
-    Audio.click();
-    if (a.id === 'fire') {
-      const { damage } = item.effect(a.level);
-      for (const e of this.enemies) {
-        if (e.dead) continue;
-        this.effects.tracer(e.x, e.y - 80, e.x, e.y, '#ff7a3a');
-        if (e.takeDamage(damage)) this.handleKill(e, null);
-      }
-      this.effects.shake(8, 0.25);
-      Audio.boom();
-      Toast.show('烈火符：全屏灼烧！');
-    } else if (a.id === 'recruit') {
-      this.bar.refresh(true);
-      Toast.show('募兵令：将士栏已刷新');
-    }
-    a.cd = item.cooldownAt ? item.cooldownAt(a.level) : (item.cooldown || 20);
+    const result = dispatchActiveItem(this, a, target);
+    if (result.sound && Audio[result.sound]) Audio[result.sound]();
+    if (result.message) Toast.show(result.message);
+    return result;
   }
 
   handleKill(enemy, tower) {
@@ -714,7 +765,7 @@ export class BattleScene {
     });
     let applied = 0;
     for (const tower of targets) {
-      if (!tower.applyStun(enemy.skill.duration)) continue;
+      if (!tower.applyStun(stunDurationAfterBuffs(enemy.skill.duration, this.itemBuffs))) continue;
       applied++;
       this.effects.ring(tower.x, tower.y, '#8ed8ff', 12, 220);
       this.effects.damageText(tower.x, tower.y - 48, '眩晕!', '#8ed8ff', 25);
@@ -952,7 +1003,7 @@ export class BattleScene {
       if (a.cd <= 0) {
         ctx.fillStyle = '#a8889a';
         ctx.font = '18px KaiTi, STKaiti, serif';
-        ctx.fillText(item.targeted ? '拖到将士' : 'Lv' + a.level, bx + ACT_W / 2, TOP_Y + TOP_H - 14);
+        ctx.fillText(item.castMode === 'target' ? '拖到将士' : '点击施放', bx + ACT_W / 2, TOP_Y + TOP_H - 14);
       }
       ctx.restore();
     }

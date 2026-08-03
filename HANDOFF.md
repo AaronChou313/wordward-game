@@ -4,7 +4,7 @@
 
 This repository is a Three Kingdoms-themed Chinese character tower-defense game. It runs entirely in the browser with Vite, plain ES modules, and Canvas 2D. The current handoff branch is `feature/gameplay-overhaul`, based on `master`, and the remote is `git@github.com:AaronChou313/wordward-game.git`.
 
-The battle-core milestone is implemented and reviewed. Progression Task 1 (data-driven gacha and dual pity) is implemented and independently reviewed; Progression Tasks 2–6 and the online account/ranking milestone remain. Do not assume the original 13-item request is complete until those plans are finished.
+The battle-core milestone is implemented and reviewed. Progression Tasks 1–2 (data-driven dual-pity gacha and differentiated active/passive items) are implemented and independently reviewed; Progression Tasks 3–6 and the online account/ranking milestone remain. Do not assume the original 13-item request is complete until those plans are finished.
 
 ## Technology and Commands
 
@@ -16,7 +16,7 @@ The battle-core milestone is implemented and reviewed. Progression Task 1 (data-
 - Production build: `npm run build`
 - Preview build: `npm run preview`
 
-Latest verified result before this handoff: 10 test files, 94 tests passed; Vite production build passed with 47 transformed modules; `git diff --check` was clean.
+Latest verified result before this handoff: 11 test files, 111 tests passed; Vite production build passed with 47 transformed modules; `git diff --check` was clean.
 
 ## Repository Layout
 
@@ -60,8 +60,8 @@ Important battle modules added during this milestone include:
 Implement [the progression plan](docs/superpowers/plans/2026-08-03-progression-systems.md) next, task by task and test-first. Required scope:
 
 1. Completed: data-driven gacha with published base/next-draw reward rates, persistent 10-pull rare guarantee, and 50-pull precious guarantee.
-2. Next: stronger active/passive item identities and additional tactical items.
-3. Additional advanced characters/word combinations with unique strategic roles.
+2. Completed: stronger active/passive item identities and additional tactical items.
+3. Next: additional advanced characters/word combinations with unique strategic roles.
 4. Clickable codex detail panels for units, words, items, elites, and Bosses.
 5. Shop inventory containing up to four unique unowned items, refreshed only after battle settlement; upgrades remain in inventory.
 6. Full progression regression pass.
@@ -80,6 +80,19 @@ The commit subject is `feat: add transparent dual-pity gacha`. The implementatio
 Independent review found no Critical or Important issues after fixes. Non-blocking regression candidates remain for the all-characters-unlocked precious fallback, first-time precious item Lv2, full 10/50 sequential draws, and a real localStorage reload path; cover them during Task 6 even if later task work does not touch gacha.
 
 The approved behavior is in [the progression design](docs/superpowers/specs/2026-08-03-progression-systems-design.md). Save V2 already contains `gacha.smallPity`, `gacha.bigPity`, and `shop.stock` placeholders for this milestone.
+
+## Completed: Progression Task 2
+
+The commit subject is `feat: differentiate active and passive items`. The implementation adds:
+
+- Five data-driven active items with cast modes, level-aware cooldowns, effect descriptors, and handler-map dispatch: `fire`, `recruit`, `train`, `reinforce`, and `warDrum`.
+- Six passive items aggregated once at battle entry: `power`, `swift`, `goldpot`, `fortification`, `bossBane`, and `resolute`.
+- New tactical hooks for filling empty refresh-bar slots, global slow, blocker HP/capacity, Boss-only damage, and stun-duration reduction.
+- Independent named slow sources for war drum, tower aura, and charm so short effects no longer overwrite longer or stronger effects.
+- Battle-entry normalization for legacy active-item strings and rejection of unknown, passive, unowned, or invalid entries.
+- Distinct active/passive inventory colors, headings, slot counts, usage hints, and draggable vertical scrolling.
+
+Automated verification covers schema identity, all active dispatch paths and cooldown behavior, passive aggregation and combat hooks, independent slow timing, save normalization, inventory presentation, and refresh-bar filling. Manual Canvas QA activated all five active items, confirmed the active/passive card treatment, and found no browser console errors. Independent review reported no Critical or Important issues; a non-blocking hardening candidate remains to deduplicate and cap active entries in deliberately corrupted saves.
 
 ## Remaining Milestone 2: Accounts and Ranking
 
@@ -100,7 +113,7 @@ See [the online design](docs/superpowers/specs/2026-08-03-online-account-ranking
 
 ## Verification and Manual QA
 
-Automated coverage is strong, but a full visual browser play-through has not been completed. Before release, manually verify:
+Automated coverage is strong, and Task 2 received focused Canvas QA, but a full visual browser play-through has not been completed. Before release, manually verify:
 
 - Fresh and migrated saves.
 - Waves 10, 20, 30, and 60, including skill telegraphs and Boss pressure.
@@ -133,6 +146,7 @@ Then read `AGENTS.md`, this file, the approved specs, and the next implementatio
 - Baseline branch: `master`
 - Development branch: `feature/gameplay-overhaul`
 - Battle-core integration fixes culminate at `2524fc2`; legacy endless migration fixes follow it.
-- Progression Task 1 uses the focused commit subject `feat: add transparent dual-pity gacha`; use `git log` for its immutable hash after checkout.
+- Progression Task 1 is commit `2b2227e` (`feat: add transparent dual-pity gacha`).
+- Progression Task 2 uses the focused commit subject `feat: differentiate active and passive items`; use `git log` for its immutable hash after checkout.
 - The `.superpowers/` execution ledger and agent reports are intentionally ignored and will not be available after cloning. The tracked specs, plans, tests, commits, and this handoff are the durable record.
 - No pull request was created during this handoff. Confirm the branch on GitHub after push before switching devices.

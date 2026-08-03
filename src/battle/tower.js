@@ -4,6 +4,11 @@ import { HEROES } from '../config/words.js';
 import { CELL, cellCenter } from '../config/map.js';
 import { Audio } from '../core/audio.js';
 import { blockStats } from './blocking.js';
+import { applySlowEffect } from './enemy.js';
+
+export function damageForTarget(damage, target, itemBuffs = {}) {
+  return target.type === 'boss' ? damage * (1 + (itemBuffs.bossDamage || 0)) : damage;
+}
 
 export class Tower {
   // kind: 'base' | 'adv' | 'hero'；heroName 仅英雄用
@@ -30,6 +35,7 @@ export class Tower {
     this.blockCapacity = 0;
     this.blockedEnemies = [];
     this.blockHitFlash = 0;
+    this.blockBuffs = {};
     const pos = cellCenter(c, r);
     this.x = pos.x; this.y = pos.y;
   }
@@ -75,9 +81,10 @@ export class Tower {
     return leveled;
   }
 
-  deployAsBlocker() {
+  deployAsBlocker(itemBuffs = {}) {
     if (this.kind !== 'base' || this.char !== '兵') return false;
     this.blocking = true;
+    this.blockBuffs = itemBuffs;
     this.dead = false;
     this.refillBlocker();
     return true;
@@ -93,7 +100,7 @@ export class Tower {
 
   refillBlocker() {
     if (!this.blocking) return false;
-    const stats = blockStats(this.tier, this.level);
+    const stats = blockStats(this.tier, this.level, this.blockBuffs);
     this.blockMaxHp = stats.maxHp;
     this.blockHp = stats.maxHp;
     this.blockCapacity = stats.capacity;
@@ -146,8 +153,7 @@ export class Tower {
       const rr = s.range * CELL;
       for (const e of enemies) {
         if (!e.dead && dist(this, e) <= rr) {
-          e.slowTimer = 0.3;
-          e.slowFactor = 1 - s.slowAura;
+          applySlowEffect(e, 'aura', 0.3, 1 - s.slowAura);
         }
       }
     }
@@ -171,8 +177,9 @@ export class Tower {
     const aoePx = s.aoe * CELL;
     const hurt = (e, d) => {
       if (e.dead) return;
-      const died = e.takeDamage(d);
-      effects.damageText(e.x, e.y - 30, String(Math.round(d)), crit ? '#ff9a3a' : '#ffdf6a', crit ? 34 : 26);
+      const targetDamage = damageForTarget(d, e, ctx2.itemBuffs);
+      const died = e.takeDamage(targetDamage);
+      effects.damageText(e.x, e.y - 30, String(Math.round(targetDamage)), crit ? '#ff9a3a' : '#ffdf6a', crit ? 34 : 26);
       if (died) {
         effects.burst(e.x, e.y, '#8a6aa8', 14);
         Audio.kill();
@@ -239,7 +246,7 @@ export class Tower {
     if (s.skill === 'charm') {
       for (const e of enemies) {
         if (!e.dead && Math.hypot(e.x - target.x, e.y - target.y) <= aoePx) {
-          e.slowTimer = 1.5; e.slowFactor = 0.5;
+          applySlowEffect(e, 'charm', 1.5, 0.5);
         }
       }
     }
