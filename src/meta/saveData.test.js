@@ -51,15 +51,21 @@ describe('migrateSave', () => {
     expect(migrated.diff.endlessFloor).toBe(1);
   });
 
-  it('idempotently collapses legacy and canonical endless claims to one key', () => {
+  it('idempotently normalizes every positive-wave legacy endless claim', () => {
     const raw = {
       version: 2,
       merit: {
-        total: 9,
+        total: 49,
         claimed: {
           'easy:30': true,
           'endless:30': true,
-          'endless:1:30': true,
+          'endless:60': true,
+          'endless:90': true,
+          'endless:1:60': false,
+          'endless:1:120': true,
+          'endless:0': true,
+          'endless:-30': true,
+          'endless:not-a-wave': true,
         },
       },
     };
@@ -70,8 +76,14 @@ describe('migrateSave', () => {
     expect(first.merit.claimed).toEqual({
       'easy:30': true,
       'endless:1:30': true,
+      'endless:1:60': false,
+      'endless:1:90': true,
+      'endless:1:120': true,
+      'endless:0': true,
+      'endless:-30': true,
+      'endless:not-a-wave': true,
     });
     expect(second.merit.claimed).toEqual(first.merit.claimed);
-    expect(second.merit.total).toBe(9);
+    expect(second.merit.total).toBe(49);
   });
 });
