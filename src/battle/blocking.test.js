@@ -6,7 +6,8 @@ import { Tower } from './tower.js';
 import { assignBlockers, blockDamage, blockStats } from './blocking.js';
 import { BattleScene } from './battleScene.js';
 import { Effects } from './effects.js';
-import { cellCenter } from '../config/map.js';
+import { CELL, cellCenter } from '../config/map.js';
+import { PATH_TOTAL } from './path.js';
 
 function roadInfantry(tier = 1, c = 0, r = 1) {
   const tower = new Tower('兵', tier, c, r, 'base');
@@ -123,7 +124,7 @@ describe('BattleScene blocker ownership integration', () => {
   it('removes a lethally attacked blocker and releases its enemy for the next update', () => {
     const scene = minimalScene();
     const blocker = roadInfantry();
-    const enemy = enemyAt(100, 10000);
+    const enemy = enemyAt(10, 10000);
     scene.grid.get(0, 1).tower = blocker;
     scene.towers.push(blocker);
     scene.enemies.push(enemy);
@@ -182,9 +183,35 @@ describe('blocker stats', () => {
 });
 
 describe('blocker assignments', () => {
-  it('assigns highest-progress eligible enemies up to capacity', () => {
+  it('does not let an exit-side blocker stop enemies near the entrance', () => {
+    const blocker = roadInfantry(1, 6, 8);
+    const enemy = enemyAt(CELL);
+
+    assignBlockers([blocker], [enemy]);
+
+    expect(blocker.blockedEnemies).toEqual([]);
+    expect(enemy.blocker).toBe(null);
+  });
+
+  it('stops an enemy once it reaches the blocker road cell', () => {
+    const blocker = roadInfantry(1, 3, 1);
+    const enemy = enemyAt(3 * CELL - 1);
+
+    assignBlockers([blocker], [enemy]);
+    expect(enemy.blocker).toBe(null);
+
+    enemy.dist = 3 * CELL;
+    assignBlockers([blocker], [enemy]);
+    const blockedAt = enemy.dist;
+    enemy.update(0.5);
+
+    expect(enemy.blocker).toBe(blocker);
+    expect(enemy.dist).toBe(blockedAt);
+  });
+
+  it('assigns only enemies in the blocker interception window up to capacity', () => {
     const blocker = roadInfantry(3);
-    const enemies = [enemyAt(100), enemyAt(400), enemyAt(250), enemyAt(500)];
+    const enemies = [enemyAt(2 * CELL), enemyAt(20), enemyAt(10), enemyAt(5)];
     enemies[3].dead = true;
 
     assignBlockers([blocker], enemies);
@@ -193,32 +220,57 @@ describe('blocker assignments', () => {
     expect(enemies.map((enemy) => enemy.blocker)).toEqual([null, blocker, blocker, null]);
   });
 
-  it('assigns each enemy once across multiple blockers and leaves overflow moving', () => {
-    const first = roadInfantry(3);
-    const second = roadInfantry(1, 1, 1);
-    const enemies = [enemyAt(100), enemyAt(500), enemyAt(400), enemyAt(300)];
+  it('lets multiple blockers own local path segments and leaves overflow moving', () => {
+    const first = roadInfantry(3, 2, 1);
+    const second = roadInfantry(1, 3, 4);
+    const enemies = [
+      enemyAt(CELL),
+      enemyAt(2 * CELL + 30),
+      enemyAt(12 * CELL + 20),
+      enemyAt(2 * CELL + 20),
+      enemyAt(2 * CELL + 10),
+    ];
 
-    assignBlockers([first, second], enemies);
+    assignBlockers([second, first], enemies);
 
-    expect(first.blockedEnemies).toEqual([enemies[1], enemies[2]]);
-    expect(second.blockedEnemies).toEqual([enemies[3]]);
+    expect(first.blockedEnemies).toEqual([enemies[1], enemies[3]]);
+    expect(second.blockedEnemies).toEqual([enemies[2]]);
+    const assigned = first.blockedEnemies.concat(second.blockedEnemies);
+    expect(new Set(assigned).size).toBe(assigned.length);
     expect(new Set(enemies.map((enemy) => enemy.blocker).filter(Boolean)).size).toBe(2);
-    const before = enemies[0].dist;
-    enemies[0].update(0.5);
-    expect(enemies[0].dist).toBeGreaterThan(before);
+    const before = enemies[4].dist;
+    enemies[4].update(0.5);
+    expect(enemies[4].dist).toBeGreaterThan(before);
+  });
+
+  it('preserves a valid local assignment when another enemy enters capacity', () => {
+    const blocker = roadInfantry();
+    const first = enemyAt(20);
+    const second = enemyAt(10);
+
+    assignBlockers([blocker], [first, second]);
+    second.dist = 30;
+    assignBlockers([blocker], [second, first]);
+
+    expect(blocker.blockedEnemies).toEqual([first]);
+    expect(first.blocker).toBe(blocker);
+    expect(second.blocker).toBe(null);
   });
 
   it('keeps assignment policy usable with plain state objects', () => {
     const blocker = roadInfantry();
     const enemies = [
-      { progress: 0.2, dead: false, reached: false, blocker: null },
-      { progress: 0.8, dead: false, reached: false, blocker: null },
+      { progress: 10 / PATH_TOTAL, dead: false, reached: false, blocker: null },
+      { progress: 20 / PATH_TOTAL, dead: false, reached: false, blocker: null },
     ];
 
     assignBlockers([blocker], enemies);
 
     expect(blocker.blockedEnemies).toEqual([enemies[1]]);
     expect(enemies.map((enemy) => enemy.blocker)).toEqual([null, blocker]);
+
+    blocker.releaseBlockedEnemies();
+    expect(enemies.map((enemy) => enemy.blocker)).toEqual([null, null]);
   });
 });
 
@@ -228,7 +280,7 @@ describe('blocked enemy attacks', () => {
     expect(blockDamage({ maxHp: 250 })).toBe(6);
 
     const blocker = roadInfantry();
-    const enemy = enemyAt(100, 250);
+    const enemy = enemyAt(10, 250);
     assignBlockers([blocker], [enemy]);
     const before = enemy.dist;
 
@@ -240,8 +292,8 @@ describe('blocked enemy attacks', () => {
   });
 
   it('releases all assigned enemies immediately when the blocker dies', () => {
-    const blocker = roadInfantry();
-    const enemies = [enemyAt(300), enemyAt(200)];
+    const blocker = roadInfantry(3);
+    const enemies = [enemyAt(20), enemyAt(10)];
     assignBlockers([blocker], enemies);
 
     expect(blocker.takeBlockDamage(blocker.blockMaxHp)).toBe(true);
@@ -256,7 +308,7 @@ describe('blocked enemy attacks', () => {
 
   it('holds enemies released mid-frame until the following frame', () => {
     const blocker = roadInfantry();
-    const enemies = [enemyAt(300), enemyAt(200)];
+    const enemies = [enemyAt(20), enemyAt(10)];
     assignBlockers([blocker], enemies);
     blocker.takeBlockDamage(blocker.blockMaxHp);
     const before = enemies[1].dist;

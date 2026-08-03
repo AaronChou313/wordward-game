@@ -44,6 +44,19 @@ function shovelDrag(scene) {
 }
 
 describe('shovel drag interaction', () => {
+  it('activates a slot through the full pointer-down, move, and pointer-up sequence', () => {
+    const scene = sceneWithShovels(1);
+    const target = cellCenter(0, 0);
+
+    scene.onPointerDown(SHOVEL_TILE.x, SHOVEL_TILE.y);
+    scene.onPointerMove(target.x, target.y);
+    scene.onPointerUp(target.x, target.y);
+
+    expect(scene.drag).toBe(null);
+    expect(scene.grid.get(0, 0).active).toBe(true);
+    expect(scene.bar.shovels).toBe(0);
+  });
+
   it('starts a shovel drag on pointer-down without consuming a shovel', () => {
     const scene = sceneWithShovels(2);
 

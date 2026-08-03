@@ -35,6 +35,7 @@ export const BLOCKING = {
   tierHpMul: 1.7,
   levelHpStep: 0.12,
   maxCapacity: 4,
+  interceptToleranceCells: 0.35,
   attackInterval: 1,
   enemyDamageRate: 0.025,
   minEnemyDamage: 4,

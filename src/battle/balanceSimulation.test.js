@@ -158,4 +158,25 @@ describe('Boss descriptor progression integration', () => {
     expect(scene.over).toBe(false);
     expect(scene.paused).toBe(false);
   });
+
+  it('uses the selected endless floor when claiming a wave-30 Boss', () => {
+    const save = getSave();
+    save.merit = { total: 0, claimed: {} };
+    save.diff.unlocked = ['easy', 'normal', 'hard', 'endless'];
+    save.diff.endlessFloor = 2;
+
+    const scene = new BattleScene({});
+    scene.diff = { id: 'endless', floor: 2, dropMul: 0 };
+
+    const result = scene.handleBossDefeated(30);
+
+    expect(result).toEqual({
+      claimed: true,
+      merit: 8,
+      unlocked: null,
+      unlockedFloor: 3,
+    });
+    expect(save.merit).toEqual({ total: 8, claimed: { 'endless:2:30': true } });
+    expect(save.diff.endlessFloor).toBe(3);
+  });
 });

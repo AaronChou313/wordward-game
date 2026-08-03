@@ -22,7 +22,11 @@ export function meritForBoss(diffId, wave) {
   return (MERIT_MULTIPLIERS[diffId] || 0) * (wave / 30);
 }
 
-export function claimKey(diffId, wave) {
+export function claimKey(diffId, wave, floor = null) {
+  if (diffId === 'endless') {
+    const endlessFloor = Number.isInteger(floor) && floor > 0 ? floor : 1;
+    return diffId + ':' + endlessFloor + ':' + wave;
+  }
   return diffId + ':' + wave;
 }
 
@@ -37,15 +41,25 @@ export function canUnlockDifficulty(save, diffId) {
   return Boolean(save.merit.claimed[claimKey(unlock.need.id, unlock.need.bossWave)]);
 }
 
-export function claimBossCompletion(save, diffId, wave) {
+export function claimBossCompletion(save, diffId, wave, floor = null) {
   if (!isBossWave(wave)) return { claimed: false, merit: 0, unlocked: null };
 
-  const key = claimKey(diffId, wave);
+  const endlessFloor = diffId === 'endless'
+    ? (Number.isInteger(floor) && floor > 0 ? floor : 1)
+    : null;
+  const key = claimKey(diffId, wave, endlessFloor);
   if (save.merit.claimed[key]) return { claimed: false, merit: 0, unlocked: null };
 
   const merit = meritForBoss(diffId, wave);
   save.merit.claimed[key] = true;
   save.merit.total += merit;
+
+  if (diffId === 'endless'
+    && wave === 30
+    && endlessFloor === save.diff.endlessFloor) {
+    save.diff.endlessFloor = endlessFloor + 1;
+    return { claimed: true, merit, unlocked: null, unlockedFloor: save.diff.endlessFloor };
+  }
 
   const unlocked = nextDifficulty(diffId);
   if (unlocked && canUnlockDifficulty(save, unlocked) && !save.diff.unlocked.includes(unlocked)) {

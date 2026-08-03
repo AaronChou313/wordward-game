@@ -567,12 +567,14 @@ export class BattleScene {
 
   // Task 4 calls this only for an identified Boss; normal wave-30 enemies never grant merit.
   handleBossDefeated(wave) {
-    const result = claimBossCompletion(getSave(), this.diff.id, wave);
+    const result = claimBossCompletion(getSave(), this.diff.id, wave, this.diff.floor);
     if (!result.claimed) return result;
 
     persist();
     const meritText = '击败 Boss！获得 ' + result.merit + ' 军功';
-    if (result.unlocked) {
+    if (result.unlockedFloor) {
+      Toast.show(meritText + '，解锁无尽·' + result.unlockedFloor + '层！');
+    } else if (result.unlocked) {
       const names = { normal: '普通', hard: '困难', endless: '无尽模式' };
       Toast.show(meritText + '，解锁 ' + names[result.unlocked] + '！');
     } else {
@@ -655,7 +657,10 @@ export class BattleScene {
         this.effects.shake(7, 0.2);
         this.effects.damageText(e.x, e.y - 40, '-1', '#ff5a4a', 34);
         Audio.hurt();
-        if (this.lordHp <= 0) this.gameOver();
+        if (this.lordHp <= 0) {
+          this.gameOver();
+          return;
+        }
       }
     }
     this.enemies = this.enemies.filter((e) => !e.dead);

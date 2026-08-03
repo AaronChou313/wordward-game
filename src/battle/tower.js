@@ -113,7 +113,10 @@ export class Tower {
   releaseBlockedEnemies() {
     const assigned = this.blockedEnemies.slice();
     this.blockedEnemies.length = 0;
-    for (const enemy of assigned) enemy.releaseFromBlocker(this);
+    for (const enemy of assigned) {
+      if (enemy.releaseFromBlocker) enemy.releaseFromBlocker(this);
+      else if (enemy.blocker === this) enemy.blocker = null;
+    }
   }
 
   applyStun(duration) {

@@ -62,4 +62,83 @@ describe('Boss completion claims', () => {
     expect(save.merit).toEqual({ total: 1, claimed: { 'easy:30': true } });
     expect(save.diff.unlocked).toEqual(['easy', 'normal']);
   });
+
+  it('advances endless floor 1 to 2 on its first wave-30 Boss claim only', () => {
+    const save = {
+      merit: { total: 0, claimed: {} },
+      diff: { unlocked: ['easy', 'normal', 'hard', 'endless'], endlessFloor: 1, best: {} },
+    };
+
+    const firstClaim = claimBossCompletion(save, 'endless', 30, 1);
+    const replay = claimBossCompletion(save, 'endless', 30, 1);
+
+    expect(firstClaim).toEqual({
+      claimed: true,
+      merit: 8,
+      unlocked: null,
+      unlockedFloor: 2,
+    });
+    expect(replay).toEqual({ claimed: false, merit: 0, unlocked: null });
+    expect(save.merit).toEqual({ total: 8, claimed: { 'endless:1:30': true } });
+    expect(save.diff.endlessFloor).toBe(2);
+  });
+
+  it('keeps the highest endless floor unchanged for a lower-floor wave-30 claim', () => {
+    const save = {
+      merit: { total: 0, claimed: {} },
+      diff: { unlocked: ['endless'], endlessFloor: 3, best: {} },
+    };
+
+    const result = claimBossCompletion(save, 'endless', 30, 2);
+
+    expect(result).toEqual({ claimed: true, merit: 8, unlocked: null });
+    expect(save.merit).toEqual({ total: 8, claimed: { 'endless:2:30': true } });
+    expect(save.diff.endlessFloor).toBe(3);
+  });
+
+  it('qualifies endless merit claims by floor and keeps wave-60 from unlocking a floor', () => {
+    const save = {
+      merit: { total: 0, claimed: {} },
+      diff: { unlocked: ['endless'], endlessFloor: 2, best: {} },
+    };
+
+    const floorOne = claimBossCompletion(save, 'endless', 30, 1);
+    const floorTwoWave60 = claimBossCompletion(save, 'endless', 60, 2);
+
+    expect(floorOne).toEqual({ claimed: true, merit: 8, unlocked: null });
+    expect(floorTwoWave60).toEqual({ claimed: true, merit: 16, unlocked: null });
+    expect(save.merit).toEqual({
+      total: 24,
+      claimed: {
+        'endless:1:30': true,
+        'endless:2:60': true,
+      },
+    });
+    expect(save.diff.endlessFloor).toBe(2);
+  });
+
+  it('awards separate wave-30 merit claims on distinct endless floors', () => {
+    const save = {
+      merit: { total: 0, claimed: {} },
+      diff: { unlocked: ['endless'], endlessFloor: 2, best: {} },
+    };
+
+    const floorOne = claimBossCompletion(save, 'endless', 30, 1);
+    const floorTwo = claimBossCompletion(save, 'endless', 30, 2);
+
+    expect(floorOne).toEqual({ claimed: true, merit: 8, unlocked: null });
+    expect(floorTwo).toEqual({
+      claimed: true,
+      merit: 8,
+      unlocked: null,
+      unlockedFloor: 3,
+    });
+    expect(save.merit).toEqual({
+      total: 16,
+      claimed: {
+        'endless:1:30': true,
+        'endless:2:30': true,
+      },
+    });
+  });
 });
