@@ -42,11 +42,11 @@ export function endlessConfig(floor) {
   };
 }
 
-// 解锁条件：在指定难度达到指定波次
+// 解锁条件：领取指定难度第 30 波 Boss 的通关军功
 export const DIFF_UNLOCK = [
-  { id: 'normal', need: { id: 'easy', wave: 8 } },
-  { id: 'hard', need: { id: 'normal', wave: 12 } },
-  { id: 'endless', need: { id: 'hard', wave: 15 } },
+  { id: 'normal', need: { id: 'easy', bossWave: 30 } },
+  { id: 'hard', need: { id: 'normal', bossWave: 30 } },
+  { id: 'endless', need: { id: 'hard', bossWave: 30 } },
 ];
 
 // 无尽模式：达到该波次解锁下一层

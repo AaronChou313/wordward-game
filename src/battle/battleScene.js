@@ -10,7 +10,8 @@ import { Effects } from './effects.js';
 import { Score } from './score.js';
 import { pointAt } from './path.js';
 import { LORD_HP, WAVE_REST, FIRST_WAVE_DELAY, waveConfig } from '../config/waves.js';
-import { resolveDiff, DIFF_UNLOCK, ENDLESS_FLOOR_WAVE } from '../config/difficulty.js';
+import { resolveDiff } from '../config/difficulty.js';
+import { claimBossCompletion } from './progression.js';
 import { pointToCell, cellCenter, CELL } from '../config/map.js';
 import { BASE_UNITS, ADV_CHARS } from '../config/units.js';
 import { HEROES, PREFIX_BUFFS, HERO_NAMES } from '../config/words.js';
@@ -56,7 +57,6 @@ export class BattleScene {
     this.volumeDragging = false;
     this.selected = null;  // Tower 或 HeroGroup
     this.elapsed = 0;
-    this.unlockedMsgs = [];
     this.drag = null;      // { source:'slot'|'tower'|'active', index?, tower?, id?, char, kind, x, y, downX, downY, moved }
     this.pointer = { x: 0, y: 0 };
 
@@ -520,6 +520,22 @@ export class BattleScene {
     }
   }
 
+  // Task 4 calls this only for an identified Boss; normal wave-30 enemies never grant merit.
+  handleBossDefeated(wave) {
+    const result = claimBossCompletion(getSave(), this.diff.id, wave);
+    if (!result.claimed) return result;
+
+    persist();
+    const meritText = '击败 Boss！获得 ' + result.merit + ' 军功';
+    if (result.unlocked) {
+      const names = { normal: '普通', hard: '困难', endless: '无尽模式' };
+      Toast.show(meritText + '，解锁 ' + names[result.unlocked] + '！');
+    } else {
+      Toast.show(meritText + '！');
+    }
+    return result;
+  }
+
   // ---------- 更新 ----------
   update(dt) {
     this.effects.update(dt);
@@ -617,23 +633,10 @@ export class BattleScene {
     if (this.score.wave > save.bestWave) {
       save.bestWave = this.score.wave;
     }
-    // 难度最佳纪录与解锁
+    // 难度最佳纪录
     const bestKey = this.diff.id === 'endless' ? 'endless' + this.diff.floor : this.diff.id;
     if (this.score.wave > (save.diff.best[bestKey] || 0)) {
       save.diff.best[bestKey] = this.score.wave;
-    }
-    for (const u of DIFF_UNLOCK) {
-      if (save.diff.unlocked.includes(u.id)) continue;
-      if ((save.diff.best[u.need.id] || 0) >= u.need.wave) {
-        save.diff.unlocked.push(u.id);
-        const name = u.id === 'endless' ? '无尽模式' : u.id === 'normal' ? '普通' : '困难';
-        this.unlockedMsgs.push('解锁新难度：' + name + '！');
-      }
-    }
-    // 无尽：达标解锁下一层
-    if (this.diff.id === 'endless' && this.diff.floor === save.diff.endlessFloor && this.score.wave >= ENDLESS_FLOOR_WAVE) {
-      save.diff.endlessFloor++;
-      this.unlockedMsgs.push('无尽·' + save.diff.endlessFloor + '层 已解锁！');
     }
     persist();
   }
@@ -931,11 +934,6 @@ export class BattleScene {
     ctx.fillStyle = '#e8c35a';
     ctx.font = '40px KaiTi, STKaiti, serif';
     ctx.fillText('获得金币 ' + this.earnedCoins, 375, 740);
-    if (this.unlockedMsgs.length > 0) {
-      ctx.fillStyle = '#7fe08a';
-      ctx.font = '28px KaiTi, STKaiti, serif';
-      this.unlockedMsgs.forEach((m, i) => ctx.fillText(m, 375, 790 + i * 36));
-    }
     ctx.restore();
     this.btnRetry.draw(ctx);
     this.btnHome.draw(ctx);
