@@ -1,20 +1,40 @@
 import { Button } from '../ui/button.js';
 import { blurCanvasTextInput, focusCanvasTextInput } from '../ui/canvasTextInput.js';
 import { getCurrentUser, getProfile, logout, updateProfile } from '../net/apiClient.js';
+import { getSyncState, syncSave, uploadLocalSave, useCloudSave } from '../net/saveSync.js';
 
 export class ProfileScene {
   constructor(scenes) {
     this.scenes = scenes;
     this.profile = { nickname: '', avatarUrl: '', bio: '' };
     this.active = null; this.busy = false; this.message = '';
+    this.sync = getSyncState();
     this.back = new Button(40, 36, 130, 58, '返回', () => scenes.switch('home'), { fontSize: 26 });
-    this.save = new Button(120, 850, 510, 76, '保存资料', () => this.saveProfile(), { fontSize: 32, bg: '#7a2a20' });
-    this.logoutButton = new Button(120, 950, 510, 68, '退出登录', () => this.signOut(), { fontSize: 26 });
+    this.save = new Button(120, 810, 510, 76, '保存资料', () => this.saveProfile(), { fontSize: 32, bg: '#7a2a20' });
+    this.useLocal = new Button(90, 920, 270, 66, '使用本地存档', () => this.chooseLocal(), { fontSize: 24, bg: '#7a2a20' });
+    this.useCloud = new Button(390, 920, 270, 66, '使用云端存档', () => this.chooseCloud(), { fontSize: 24 });
+    this.logoutButton = new Button(120, 1020, 510, 68, '退出登录', () => this.signOut(), { fontSize: 26 });
   }
 
-  enter() { this.lifecycle = {}; this.load(); }
+  enter() { this.lifecycle = {}; this.load(); this.syncCloud(); }
   exit() { this.lifecycle = null; blurCanvasTextInput(); }
-  update() {}
+  update() { this.sync = getSyncState(); }
+
+  async syncCloud() {
+    const lifecycle = this.lifecycle;
+    const result = await syncSave();
+    if (this.lifecycle === lifecycle) this.sync = result;
+  }
+
+  async chooseLocal() {
+    if (this.sync.status !== 'conflict') return;
+    this.sync = await uploadLocalSave();
+  }
+
+  chooseCloud() {
+    if (this.sync.status !== 'conflict') return;
+    this.sync = useCloudSave();
+  }
 
   async load() {
     const lifecycle = this.lifecycle;
@@ -68,6 +88,8 @@ export class ProfileScene {
     if (inside(x, y, 100, 470, 550, 72)) return this.focus('avatarUrl');
     if (inside(x, y, 100, 610, 550, 130)) return this.focus('bio');
     if (this.save.hitTest(x, y)) return this.save.onClick();
+    if (this.sync.status === 'conflict' && this.useLocal.hitTest(x, y)) return this.useLocal.onClick();
+    if (this.sync.status === 'conflict' && this.useCloud.hitTest(x, y)) return this.useCloud.onClick();
     if (this.logoutButton.hitTest(x, y)) return this.logoutButton.onClick();
   }
   onPointerMove() {}
@@ -81,8 +103,12 @@ export class ProfileScene {
     drawField(ctx, 100, 330, 550, 72, '昵称', this.profile.nickname, this.active === 'nickname');
     drawField(ctx, 100, 470, 550, 72, '头像 HTTPS 地址', this.profile.avatarUrl, this.active === 'avatarUrl');
     drawField(ctx, 100, 610, 550, 130, '简介', this.profile.bio, this.active === 'bio');
-    this.save.draw(ctx); this.logoutButton.draw(ctx);
-    ctx.fillStyle = this.message.includes('已保存') ? '#a8d8a0' : '#e08a78'; ctx.font = '24px KaiTi, serif'; ctx.fillText(this.message, 375, 1090);
+    this.save.draw(ctx);
+    if (this.sync.status === 'conflict') { this.useLocal.draw(ctx); this.useCloud.draw(ctx); }
+    this.logoutButton.draw(ctx);
+    ctx.fillStyle = this.message.includes('已保存') ? '#a8d8a0' : '#e08a78'; ctx.font = '22px KaiTi, serif'; ctx.fillText(this.message, 375, 1125);
+    ctx.fillStyle = syncColor(this.sync.status); ctx.font = '22px KaiTi, serif';
+    ctx.fillText(syncLabel(this.sync.status), 375, 1170);
   }
 }
 
@@ -94,3 +120,18 @@ function drawField(ctx, x, y, w, h, label, value, active) {
 }
 
 function inside(x, y, left, top, width, height) { return x >= left && x <= left + width && y >= top && y <= top + height; }
+
+function syncLabel(status) {
+  return {
+    offline: '云存档：离线（本地进度正常保存）',
+    syncing: '云存档：同步中…',
+    synced: '云存档：已同步',
+    conflict: '云存档：请选择保留本地或云端进度',
+  }[status] || '云存档：离线';
+}
+
+function syncColor(status) {
+  if (status === 'synced') return '#a8d8a0';
+  if (status === 'syncing') return '#e8c35a';
+  return '#e08a78';
+}

@@ -79,6 +79,56 @@ describe('API client sessions', () => {
       '/api/auth/logout', expect.objectContaining({ method: 'POST', credentials: 'include' }),
     ]);
   });
+
+  it('never retries an old-account request after the signed-in user changes', async () => {
+    let resolveOldRequest;
+    const oldRequestResponse = new Promise((resolve) => { resolveOldRequest = resolve; });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response({
+        accessToken: 'user-one-token', user: { id: 'user-1', username: 'liubei' },
+      }))
+      .mockReturnValueOnce(oldRequestResponse)
+      .mockResolvedValueOnce(response({
+        accessToken: 'user-two-token', user: { id: 'user-2', username: 'caocao' },
+      }));
+    vi.stubGlobal('fetch', fetchMock);
+    await login('liubei', 'correct-horse-123');
+
+    const oldRequest = apiRequest('/api/save', { method: 'PUT', body: { version: 0, data: {} } });
+    await login('caocao', 'correct-horse-456');
+    resolveOldRequest(response({ error: 'expired' }, 401));
+
+    await expect(oldRequest).rejects.toMatchObject({ status: 401 });
+    expect(getAccessToken()).toBe('user-two-token');
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not let an in-flight old refresh overwrite a newly established session', async () => {
+    let resolveOldRefresh;
+    const oldRefresh = new Promise((resolve) => { resolveOldRefresh = resolve; });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response({
+        accessToken: 'user-one-token', user: { id: 'user-1', username: 'liubei' },
+      }))
+      .mockResolvedValueOnce(response({ error: 'expired' }, 401))
+      .mockReturnValueOnce(oldRefresh)
+      .mockResolvedValueOnce(response({
+        accessToken: 'user-two-token', user: { id: 'user-2', username: 'caocao' },
+      }));
+    vi.stubGlobal('fetch', fetchMock);
+    await login('liubei', 'correct-horse-123');
+
+    const oldRequest = apiRequest('/api/profile');
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    await login('caocao', 'correct-horse-456');
+    resolveOldRefresh(response({
+      accessToken: 'stale-refresh-token', user: { id: 'user-1', username: 'liubei' },
+    }));
+
+    await expect(oldRequest).rejects.toMatchObject({ status: 401 });
+    expect(getAccessToken()).toBe('user-two-token');
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
 });
 
 function response(body, status = 200) {

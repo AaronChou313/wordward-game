@@ -79,6 +79,12 @@ export function persist() {
   saveData('save', getSave());
 }
 
+export function replaceSave(raw, options = {}) {
+  data = migrateSave(raw);
+  saveData('save', data, { notify: options.sync !== false });
+  return data;
+}
+
 export function addGold(n) {
   getSave().gold += n;
   persist();

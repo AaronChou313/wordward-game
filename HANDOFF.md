@@ -209,6 +209,20 @@ Manual browser QA entered a username and password through the hidden keyboard br
 
 Verification passed the API suite (4 files / 17 tests) under Node 22.23.2, the combined root suite (19 files / 166 tests), Prisma validation, the Vite build (53 modules), and `git diff --check`. Next implement Online Task 4 versioned cloud-save synchronization and explicit conflict handling.
 
+## Completed: Online Task 4
+
+The focused commit subject is `feat: add resilient cloud save sync`. The implementation adds:
+
+- Authenticated `GET /api/save` and `PUT /api/save` routes with owner-scoped reads, version-zero first writes, atomic optimistic version increments, stale-write `409` responses containing the current cloud save, and first-write unique-constraint race handling.
+- A 256 KiB JSON save limit, positive schema-version validation, and explicit rejection of the top-level client `merit` object. The client strips that protected field before upload; leaderboard merit remains outside cloud-save trust boundaries.
+- A local-first storage subscription: every gameplay save is written locally before a cloud action is queued. Sync exposes `offline`, `syncing`, `synced`, and `conflict`, persists dirty/version metadata, retries failed reads and writes, and reacts to browser network recovery.
+- Explicit first-login conflict choices on the profile scene. `uploadLocalSave()` keeps local progression, while `useCloudSave()` replaces it only after the player chooses; neither path silently overwrites the other save.
+- Canonical key-sorted save comparison for PostgreSQL JSONB, serialized GET/PUT drains, latest-snapshot coalescing, and session-generation guards so delayed requests or refreshes cannot cross account boundaries.
+
+The independent review deliberately interleaved concurrent saves, delayed GETs, delayed PUTs, timer-triggered uploads, API recovery, account switching, and refresh rotation. Each discovered race was reproduced by a failing test before its fix. Final review reported no Critical, Important, or Minor issues and Ready: Yes.
+
+Verification passed the API suite (5 files / 24 tests) under Node 22.23.2, the combined root suite (21 files / 190 tests), Prisma validation, the Vite build (54 modules), and `git diff --check`. Automated client scenarios simulate both API outage recovery and explicit conflicts. Next implement Online Task 5 server-validated merit claims and the global leaderboard; never derive ranking totals from cloud-save JSON.
+
 ## Verification and Manual QA
 
 Automated coverage is strong, and Task 2 received focused Canvas QA, but a full visual browser play-through has not been completed. Before release, manually verify:
@@ -252,7 +266,8 @@ Then read `AGENTS.md`, this file, the approved specs, and the next implementatio
 - Progression Task 6 is commit `c4d523c` (`test: cover progression systems`).
 - Online Task 1 is commit `42fc7c9` (`feat: scaffold account api and database`).
 - Online Task 2 is commit `4963f5f` (`feat: add secure username authentication`).
-- Online Task 3 uses the focused commit subject `feat: add account and profile flows`; use `git log` for its immutable hash after checkout.
+- Online Task 3 is commit `3486142` (`feat: add account and profile flows`).
+- Online Task 4 uses the focused commit subject `feat: add resilient cloud save sync`; use `git log` for its immutable hash after checkout.
 - After all online tasks and release verification are complete, the user has authorized pushing this branch, connecting with `ssh aaron-cloud`, pulling from GitHub, and deploying on the configured server. Inspect the existing remote services and deployment state before changing them; preserve unrelated workloads and document the exact production commands, backup, and rollback path here.
 - The `.superpowers/` execution ledger and agent reports are intentionally ignored and will not be available after cloning. The tracked specs, plans, tests, commits, and this handoff are the durable record.
 - No pull request was created during this handoff. Confirm the branch on GitHub after push before switching devices.

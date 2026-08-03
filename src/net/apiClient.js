@@ -1,6 +1,8 @@
 let accessToken = null;
 let currentUser = null;
 let refreshInFlight = null;
+let refreshEpoch = null;
+let sessionEpoch = 0;
 
 export class ApiError extends Error {
   constructor(status, data) {
@@ -19,14 +21,16 @@ export function getCurrentUser() {
 }
 
 export function clearSession() {
+  sessionEpoch++;
   accessToken = null;
   currentUser = null;
 }
 
 export async function apiRequest(path, options = {}) {
+  const requestEpoch = sessionEpoch;
   const response = await fetch(path, requestOptions(options));
   if (response.status === 401 && options.retry !== false && path !== '/api/auth/refresh') {
-    const refreshed = await refreshSession();
+    const refreshed = requestEpoch === sessionEpoch && await refreshSession();
     if (refreshed) return apiRequest(path, { ...options, retry: false });
   }
   const data = await responseData(response);
@@ -66,37 +70,45 @@ async function establishSession(path, username, password) {
   const session = await apiRequest(path, {
     method: 'POST', body: { username, password }, retry: false,
   });
+  sessionEpoch++;
   accessToken = session.accessToken;
   currentUser = session.user;
   return session;
 }
 
 async function refreshSession() {
-  if (!refreshInFlight) {
-    refreshInFlight = performRefresh().finally(() => {
+  const epoch = sessionEpoch;
+  if (refreshInFlight && refreshEpoch === epoch) return refreshInFlight;
+  const promise = performRefresh(epoch).finally(() => {
+    if (refreshInFlight === promise) {
       refreshInFlight = null;
-    });
-  }
-  return refreshInFlight;
+      refreshEpoch = null;
+    }
+  });
+  refreshInFlight = promise;
+  refreshEpoch = epoch;
+  return promise;
 }
 
-async function performRefresh() {
+async function performRefresh(epoch) {
   try {
     const response = await fetch('/api/auth/refresh', {
       method: 'POST',
       credentials: 'include',
     });
+    if (sessionEpoch !== epoch) return false;
     if (!response.ok) {
       clearSession();
       return false;
     }
     const session = await responseData(response);
+    if (sessionEpoch !== epoch) return false;
     if (!session || !session.accessToken) throw new Error('Invalid session response');
     accessToken = session.accessToken;
     currentUser = session.user;
     return true;
   } catch {
-    clearSession();
+    if (sessionEpoch === epoch) clearSession();
     return false;
   }
 }

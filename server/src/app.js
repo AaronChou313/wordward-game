@@ -6,6 +6,7 @@ import { loadConfig } from './config.js';
 import { createPrisma } from './db.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { profileRoutes } from './modules/profile/routes.js';
+import { saveRoutes } from './modules/save/routes.js';
 
 export function buildApp(options = {}) {
   const config = options.config || loadConfig();
@@ -30,6 +31,7 @@ export function buildApp(options = {}) {
   });
   app.register(authRoutes, { prefix: '/api/auth' });
   app.register(profileRoutes, { prefix: '/api/profile' });
+  app.register(saveRoutes, { prefix: '/api/save' });
 
   app.get('/api/health', async () => ({ status: 'ok' }));
 
