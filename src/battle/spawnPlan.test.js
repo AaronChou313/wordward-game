@@ -117,24 +117,61 @@ describe('special enemy control', () => {
     )).toEqual(towers.slice(1, 3));
   });
 
-  it('telegraphs for 0.8 seconds before firing and resetting cooldown', () => {
+  it('carries frame time through cooldown, the 0.8-second telegraph, and reset cooldown', () => {
     const skill = { telegraph: 0.8, cooldown: 7 };
-    let state = advanceSkillTimer({ cooldown: 0, telegraph: 0 }, skill, 0.1);
+    let state = advanceSkillTimer({ cooldown: 0.05, telegraph: 0 }, skill, 0.1);
 
-    expect(state).toEqual({ cooldown: 0, telegraph: 0.8, fired: false });
-    state = advanceSkillTimer(state, skill, 0.79);
+    expect(state.cooldown).toBe(0);
+    expect(state.telegraph).toBeCloseTo(0.75);
     expect(state.fired).toBe(false);
-    expect(state.telegraph).toBeCloseTo(0.01);
-    state = advanceSkillTimer(state, skill, 0.01);
-    expect(state).toEqual({ cooldown: 7, telegraph: 0, fired: true });
+    state = advanceSkillTimer(state, skill, 0.7);
+    expect(state.fired).toBe(false);
+    expect(state.telegraph).toBeCloseTo(0.05);
+    state = advanceSkillTimer(state, skill, 0.1);
+    expect(state.telegraph).toBe(0);
+    expect(state.cooldown).toBeCloseTo(6.95);
+    expect(state.fired).toBe(true);
   });
 
-  it('starts two seconds of immunity when a stun ends', () => {
-    const ended = advanceStunTimers({ stunTimer: 0.1, stunImmuneTimer: 0 }, 0.1);
-    const immune = advanceStunTimers(ended, 0.5);
+  it('carries stun-expiry overflow into the two-second immunity window', () => {
+    const ended = advanceStunTimers({ stunTimer: 0.1, stunImmuneTimer: 0 }, 0.35);
 
-    expect(ended).toEqual({ stunTimer: 0, stunImmuneTimer: 2, stunned: true });
-    expect(immune).toEqual({ stunTimer: 0, stunImmuneTimer: 1.5, stunned: false });
+    expect(ended.stunTimer).toBe(0);
+    expect(ended.stunImmuneTimer).toBeCloseTo(1.75);
+    expect(ended.stunned).toBe(false);
+  });
+
+  it('lets a tower attack when its stun expires exactly on the current update', () => {
+    const tower = new Tower('兵', 1, 1, 0, 'base');
+    let damageTaken = 0;
+    const enemy = {
+      dead: false,
+      reached: false,
+      x: tower.x,
+      y: tower.y,
+      progress: 0,
+      takeDamage(damage) {
+        damageTaken += damage;
+        return false;
+      },
+    };
+    tower.stunTimer = 0.1;
+
+    tower.update(0.1, {
+      enemies: [enemy],
+      effects: {
+        damageText() {},
+        tracer() {},
+        slash() {},
+      },
+      itemBuffs: { atk: 0, spd: 0 },
+      unitGear: {},
+      onKill() {},
+    });
+
+    expect(tower.stunTimer).toBe(0);
+    expect(tower.stunImmuneTimer).toBe(2);
+    expect(damageTaken).toBeGreaterThan(0);
   });
 
   it('does not reset or extend an active stun or immunity window', () => {

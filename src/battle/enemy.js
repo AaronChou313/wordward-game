@@ -110,20 +110,48 @@ export function selectStunTargets(enemy, towers, skill, rangeOfTower = baseRange
 }
 
 export function advanceSkillTimer(state, skill, dt) {
-  if (state.telegraph > 0) {
-    const remaining = state.telegraph - dt;
-    const telegraph = remaining <= 1e-9 ? 0 : remaining;
-    if (telegraph === 0) {
-      return { cooldown: skill.cooldown, telegraph: 0, fired: true };
+  const epsilon = 1e-9;
+  let cooldown = Math.max(0, state.cooldown);
+  let telegraph = Math.max(0, state.telegraph);
+  let remaining = Math.max(0, dt);
+  let fired = false;
+
+  if (cooldown <= epsilon && telegraph <= epsilon) telegraph = skill.telegraph;
+
+  while (remaining > epsilon) {
+    if (telegraph > epsilon) {
+      if (remaining + epsilon < telegraph) {
+        telegraph -= remaining;
+        remaining = 0;
+      } else {
+        remaining = Math.max(0, remaining - telegraph);
+        telegraph = 0;
+        cooldown = skill.cooldown;
+        fired = true;
+      }
+      continue;
     }
-    return { cooldown: state.cooldown, telegraph, fired: false };
+
+    if (cooldown > epsilon) {
+      if (remaining + epsilon < cooldown) {
+        cooldown -= remaining;
+        remaining = 0;
+      } else {
+        remaining = Math.max(0, remaining - cooldown);
+        cooldown = 0;
+        telegraph = skill.telegraph;
+      }
+      continue;
+    }
+
+    telegraph = skill.telegraph;
   }
 
-  const cooldown = Math.max(0, state.cooldown - dt);
-  if (cooldown === 0) {
-    return { cooldown: 0, telegraph: skill.telegraph, fired: false };
-  }
-  return { cooldown, telegraph: 0, fired: false };
+  return {
+    cooldown: cooldown <= epsilon ? 0 : cooldown,
+    telegraph: telegraph <= epsilon ? 0 : telegraph,
+    fired,
+  };
 }
 
 function baseRange(tower) {

@@ -259,18 +259,30 @@ export class Tower {
 }
 
 export function advanceStunTimers(state, dt) {
-  if (state.stunTimer > 0) {
-    const stunTimer = Math.max(0, state.stunTimer - dt);
-    return {
-      stunTimer,
-      stunImmuneTimer: stunTimer === 0 ? 2 : state.stunImmuneTimer,
-      stunned: true,
-    };
+  const epsilon = 1e-9;
+  let stunTimer = Math.max(0, state.stunTimer);
+  let stunImmuneTimer = Math.max(0, state.stunImmuneTimer);
+  let remaining = Math.max(0, dt);
+
+  if (stunTimer > epsilon) {
+    if (remaining + epsilon < stunTimer) {
+      stunTimer -= remaining;
+      remaining = 0;
+    } else {
+      remaining = Math.max(0, remaining - stunTimer);
+      stunTimer = 0;
+      stunImmuneTimer = Math.max(stunImmuneTimer, 2);
+    }
   }
+
+  if (stunTimer <= epsilon && remaining > epsilon) {
+    stunImmuneTimer = Math.max(0, stunImmuneTimer - remaining);
+  }
+
   return {
-    stunTimer: 0,
-    stunImmuneTimer: Math.max(0, state.stunImmuneTimer - dt),
-    stunned: false,
+    stunTimer: stunTimer <= epsilon ? 0 : stunTimer,
+    stunImmuneTimer: stunImmuneTimer <= epsilon ? 0 : stunImmuneTimer,
+    stunned: stunTimer > epsilon,
   };
 }
 
