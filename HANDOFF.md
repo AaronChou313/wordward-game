@@ -195,6 +195,20 @@ Independent security review reported no Critical or Important issues. Follow-up 
 
 Verification passed the API suite (3 files / 13 tests) under Node 22.23.2, the combined root suite (17 files / 158 tests), Prisma client generation/validation, the Vite build, production-dependency audit with zero findings, and `git diff --check`. Next implement Online Task 3 profile API and Canvas account/profile screens.
 
+## Completed: Online Task 3
+
+The focused commit subject is `feat: add account and profile flows`. The implementation adds:
+
+- Authenticated `GET /api/profile` and `PUT /api/profile` routes that derive ownership exclusively from the verified access token and validate nickname, biography, and HTTPS-only avatar URLs.
+- A browser API client that keeps access tokens in memory, sends refresh cookies with credentials, retries one 401 after refresh, coalesces concurrent refresh attempts into a single token rotation, and reports non-JSON outages as a stable `API unavailable` error.
+- Canvas login and registration screens with NFKC-aware username validation, password masking, mobile/IME-compatible hidden text input, session restoration, and clear unavailable-server feedback.
+- A Canvas profile screen for viewing and editing nickname, biography, and avatar URL, with authenticated logout and lifecycle guards preventing late restore/profile responses from navigating after the scene has exited.
+- A home-screen account entry and scene registration without changing the completed battle core.
+
+Manual browser QA entered a username and password through the hidden keyboard bridge, verified masked Canvas rendering, exercised the unavailable-API message against a static preview, and found a clean browser console. Independent review initially found one Important concurrent-refresh race; a red test reproduced two refresh rotations and the shared in-flight refresh fix reduced that to one. Re-review reported no Critical or Important issues. A non-blocking hardening candidate remains for suppressing a late successful login/register navigation if the user returns home while the request is in flight.
+
+Verification passed the API suite (4 files / 17 tests) under Node 22.23.2, the combined root suite (19 files / 166 tests), Prisma validation, the Vite build (53 modules), and `git diff --check`. Next implement Online Task 4 versioned cloud-save synchronization and explicit conflict handling.
+
 ## Verification and Manual QA
 
 Automated coverage is strong, and Task 2 received focused Canvas QA, but a full visual browser play-through has not been completed. Before release, manually verify:
@@ -237,6 +251,8 @@ Then read `AGENTS.md`, this file, the approved specs, and the next implementatio
 - Progression Task 5 is commit `1808201` (`feat: add rotating four-item shop`).
 - Progression Task 6 is commit `c4d523c` (`test: cover progression systems`).
 - Online Task 1 is commit `42fc7c9` (`feat: scaffold account api and database`).
-- Online Task 2 uses the focused commit subject `feat: add secure username authentication`; use `git log` for its immutable hash after checkout.
+- Online Task 2 is commit `4963f5f` (`feat: add secure username authentication`).
+- Online Task 3 uses the focused commit subject `feat: add account and profile flows`; use `git log` for its immutable hash after checkout.
+- After all online tasks and release verification are complete, the user has authorized pushing this branch, connecting with `ssh aaron-cloud`, pulling from GitHub, and deploying on the configured server. Inspect the existing remote services and deployment state before changing them; preserve unrelated workloads and document the exact production commands, backup, and rollback path here.
 - The `.superpowers/` execution ledger and agent reports are intentionally ignored and will not be available after cloning. The tracked specs, plans, tests, commits, and this handoff are the durable record.
 - No pull request was created during this handoff. Confirm the branch on GitHub after push before switching devices.

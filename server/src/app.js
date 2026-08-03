@@ -5,6 +5,7 @@ import Fastify from 'fastify';
 import { loadConfig } from './config.js';
 import { createPrisma } from './db.js';
 import { authRoutes } from './modules/auth/routes.js';
+import { profileRoutes } from './modules/profile/routes.js';
 
 export function buildApp(options = {}) {
   const config = options.config || loadConfig();
@@ -28,6 +29,7 @@ export function buildApp(options = {}) {
     timeWindow: '1 minute',
   });
   app.register(authRoutes, { prefix: '/api/auth' });
+  app.register(profileRoutes, { prefix: '/api/profile' });
 
   app.get('/api/health', async () => ({ status: 'ok' }));
 

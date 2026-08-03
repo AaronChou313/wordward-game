@@ -17,6 +17,7 @@ export class HomeScene {
       new Button(175, 940, 400, 76, '抽 奖', () => { Audio.click(); scenes.switch('gacha'); }, { fontSize: 34 }),
       new Button(175, 1030, 195, 76, '装 备', () => { Audio.click(); scenes.switch('equip'); }, { fontSize: 34 }),
       new Button(380, 1030, 195, 76, '图 鉴', () => { Audio.click(); scenes.switch('codex'); }, { fontSize: 34 }),
+      new Button(175, 1120, 400, 76, '账 号', () => { Audio.click(); scenes.switch('account'); }, { fontSize: 30 }),
     ];
   }
 
@@ -108,7 +109,7 @@ export class HomeScene {
     ctx.textAlign = 'center';
     ctx.fillStyle = '#6a5a42';
     ctx.font = '22px KaiTi, STKaiti, serif';
-    ctx.fillText('拖拽文字到发光格子布阵，相邻组词可激活进阶之力', 375, 1180);
+    ctx.fillText('拖拽文字到发光格子布阵，相邻组词可激活进阶之力', 375, 1240);
     ctx.restore();
 
     Toast.render(ctx);
