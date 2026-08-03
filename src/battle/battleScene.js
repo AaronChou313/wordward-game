@@ -4,6 +4,7 @@ import { Enemy } from './enemy.js';
 import { Tower } from './tower.js';
 import { HeroGroup } from './heroGroup.js';
 import { RefreshBar } from './refreshBar.js';
+import { createCharPool } from './charPool.js';
 import { rescan } from './wordSystem.js';
 import { canMerge, mergeInto } from './merge.js';
 import { Effects } from './effects.js';
@@ -54,6 +55,7 @@ export class BattleScene {
     this.over = false;
     this.shovelMode = false;
     this.settingsOpen = false;
+    this.campOpen = false;
     this.volumeDragging = false;
     this.selected = null;  // Tower 或 HeroGroup
     this.elapsed = 0;
@@ -93,7 +95,8 @@ export class BattleScene {
     this.actives = save.items.equippedActive.map((eq) => ({ id: eq.id, level: eq.level, cd: 0 }));
 
     // 刷新栏
-    this.bar = new RefreshBar(save.unlockedChars, this.diff);
+    this.charPool = createCharPool(save.unlockedChars);
+    this.bar = new RefreshBar(save.unlockedChars, this.diff, this.charPool);
     this.bar.initialFill();
 
     // 波次状态（开局留准备时间）
@@ -105,17 +108,23 @@ export class BattleScene {
     this.waveCfg = null;
 
     // 按钮
-    this.btnSpeed = new Button(467, TOP_Y, 80, TOP_H, 'x1', () => {
+    this.btnSpeed = new Button(467, TOP_Y, 60, TOP_H, 'x1', () => {
       this.speed = this.speed === 1 ? 2 : 1;
       this.btnSpeed.label = 'x' + this.speed;
       Audio.click();
     }, { fontSize: 26 });
-    this.btnPause = new Button(555, TOP_Y, 80, TOP_H, '停', () => {
+    this.btnPause = new Button(535, TOP_Y, 60, TOP_H, '停', () => {
       this.paused = !this.paused;
       this.btnPause.label = this.paused ? '续' : '停';
       Audio.click();
     }, { fontSize: 26 });
-    this.btnGear = new Button(643, TOP_Y, 72, TOP_H, '⚙', () => {
+    this.btnCamp = new Button(603, TOP_Y, 60, TOP_H, '军营', () => {
+      this.campOpen = true;
+      this.drag = null;
+      this.selected = null;
+      Audio.click();
+    }, { fontSize: 22 });
+    this.btnGear = new Button(671, TOP_Y, 56, TOP_H, '⚙', () => {
       this.settingsOpen = true;
       Audio.click();
     }, { fontSize: 26 });
@@ -140,6 +149,10 @@ export class BattleScene {
       Audio.click();
       this.settingsOpen = false;
       this.gameOver();
+    });
+    this.btnCloseCamp = new Button(175, 1110, 400, 70, '继续战斗', () => {
+      this.campOpen = false;
+      Audio.click();
     });
   }
 
@@ -186,8 +199,13 @@ export class BattleScene {
       }
       return;
     }
+    if (this.campOpen) {
+      if (this.btnCloseCamp.hitTest(x, y)) this.btnCloseCamp.onClick();
+      return;
+    }
     if (this.btnSpeed.hitTest(x, y)) return this.btnSpeed.onClick();
     if (this.btnPause.hitTest(x, y)) return this.btnPause.onClick();
+    if (this.btnCamp.hitTest(x, y)) return this.btnCamp.onClick();
     if (this.btnGear.hitTest(x, y)) return this.btnGear.onClick();
     if (this.btnRefresh.hitTest(x, y)) return this.tryRefresh();
     if (this.btnShovel.hitTest(x, y)) return this.btnShovel.onClick();
@@ -243,6 +261,7 @@ export class BattleScene {
 
   onPointerMove(x, y) {
     this.pointer = { x, y };
+    if (this.campOpen) return;
     if (this.volumeDragging) {
       this.setVolumeFromX(x);
       return;
@@ -263,7 +282,7 @@ export class BattleScene {
       persist();
       return;
     }
-    if (!this.drag || this.settingsOpen) { this.drag = null; return; }
+    if (!this.drag || this.settingsOpen || this.campOpen) { this.drag = null; return; }
     const drag = this.drag;
     this.drag = null;
 
@@ -540,7 +559,7 @@ export class BattleScene {
   update(dt) {
     this.effects.update(dt);
     Toast.update(dt);
-    if (this.over || this.paused || this.settingsOpen) return;
+    if (this.over || this.paused || this.settingsOpen || this.campOpen) return;
     dt *= this.speed;
     this.elapsed += dt;
 
@@ -709,6 +728,7 @@ export class BattleScene {
     }
 
     if (this.settingsOpen) this.renderSettings(ctx);
+    if (this.campOpen) this.renderCamp(ctx);
     if (this.over) this.renderOver(ctx);
     Toast.render(ctx);
   }
@@ -833,6 +853,7 @@ export class BattleScene {
 
     this.btnSpeed.draw(ctx);
     this.btnPause.draw(ctx);
+    this.btnCamp.draw(ctx);
     this.btnGear.draw(ctx);
   }
 
@@ -918,6 +939,43 @@ export class BattleScene {
 
     this.btnResume.draw(ctx);
     this.btnExit.draw(ctx);
+  }
+
+  renderCamp(ctx) {
+    const snapshot = this.charPool.snapshot();
+    const chars = [...new Set(getSave().unlockedChars)].filter((char) => ADV_CHARS[char]);
+    const initialTotal = Object.values(snapshot).reduce((total, entry) => total + entry.initial, 0);
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+    ctx.fillRect(0, 0, 750, 1334);
+    drawPanel(ctx, 70, 140, 610, 1080, '军 营');
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#e8c35a';
+    ctx.font = '28px KaiTi, STKaiti, serif';
+    ctx.fillText('总剩余 ' + this.charPool.remainingTotal() + ' / ' + initialTotal, 375, 255);
+    ctx.fillStyle = '#a8895a';
+    ctx.font = '20px KaiTi, STKaiti, serif';
+    ctx.fillText('进阶字：剩余 / 初始（出现即消耗，不会返还）', 375, 292);
+
+    for (let i = 0; i < chars.length; i++) {
+      const char = chars[i];
+      const entry = snapshot[char] || { remaining: 0, initial: 0 };
+      const column = Math.floor(i / 15);
+      const row = i % 15;
+      const x = column === 0 ? 190 : 470;
+      const y = 345 + row * 50;
+      ctx.fillStyle = entry.remaining > 0 ? '#f0d8a8' : '#76695c';
+      ctx.font = '26px KaiTi, STKaiti, serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(char, x, y);
+      ctx.textAlign = 'right';
+      ctx.font = '22px KaiTi, STKaiti, serif';
+      ctx.fillText(entry.remaining + ' / ' + entry.initial, x + 145, y);
+    }
+    ctx.restore();
+    this.btnCloseCamp.draw(ctx);
   }
 
   renderOver(ctx) {

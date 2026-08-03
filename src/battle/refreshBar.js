@@ -2,12 +2,15 @@
 import { REFRESH_BASE_CD, REFRESH_CD_STEP, KILL_CD_REDUCE, REFRESH_SLOTS, SHOVEL_DROP_CHANCE, SHOVEL_PITY } from '../config/economy.js';
 import { BASE_WEIGHTS, ADV_CHARS } from '../config/units.js';
 import { advCharChance } from '../config/waves.js';
+import { createCharPool } from './charPool.js';
 
 export class RefreshBar {
-  constructor(unlockedChars, diff) {
+  constructor(unlockedChars, diff, charPool = null, random = Math.random) {
     this.slots = new Array(REFRESH_SLOTS).fill(null); // { char, kind, tier, level, xp }
     this.unlockedChars = unlockedChars;
     this.diff = diff || null;
+    this.charPool = charPool || createCharPool(unlockedChars);
+    this.random = random;
     this.cool = 0;
     this.coolMax = REFRESH_BASE_CD;
     this.refreshCount = 0;
@@ -28,13 +31,13 @@ export class RefreshBar {
 
   pullOne() {
     const advChance = advCharChance(this.wave, this.diff);
-    if (this.unlockedChars.length > 0 && Math.random() < advChance) {
-      const char = this.unlockedChars[Math.floor(Math.random() * this.unlockedChars.length)];
-      return { char, kind: 'adv', tier: 1, level: 1, xp: 0 };
+    if (this.random() < advChance) {
+      const char = this.charPool.draw(this.random);
+      if (char) return { char, kind: 'adv', tier: 1, level: 1, xp: 0 };
     }
     let total = 0;
     for (const k in BASE_WEIGHTS) total += BASE_WEIGHTS[k];
-    let roll = Math.random() * total;
+    let roll = this.random() * total;
     for (const k in BASE_WEIGHTS) {
       roll -= BASE_WEIGHTS[k];
       if (roll <= 0) return { char: k, kind: 'base', tier: 1, level: 1, xp: 0 };
@@ -51,7 +54,7 @@ export class RefreshBar {
     this.cool = this.coolMax;
     this.sinceShovel++;
     const chance = SHOVEL_DROP_CHANCE + (this.diff ? this.diff.shovelAdd : 0);
-    if (Math.random() < chance || this.sinceShovel > SHOVEL_PITY) {
+    if (this.random() < chance || this.sinceShovel > SHOVEL_PITY) {
       this.shovels++;
       this.sinceShovel = 0;
     }
