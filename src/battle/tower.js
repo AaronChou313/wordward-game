@@ -3,6 +3,7 @@ import { BASE_UNITS, ADV_CHARS, tierAtkMul, tierIntervalMul, levelAtkMul, levelI
 import { HEROES } from '../config/words.js';
 import { CELL, cellCenter } from '../config/map.js';
 import { Audio } from '../core/audio.js';
+import { blockStats } from './blocking.js';
 
 export class Tower {
   // kind: 'base' | 'adv' | 'hero'；heroName 仅英雄用
@@ -22,6 +23,13 @@ export class Tower {
     this.auraSpd = 0;      // 光环攻速（曹操等，每帧重算）
     this.flash = 0;        // 强化提示闪烁
     this.group = null;     // 所属英雄组（HeroGroup），未入组为 null
+    this.dead = false;
+    this.blocking = false;
+    this.blockHp = 0;
+    this.blockMaxHp = 0;
+    this.blockCapacity = 0;
+    this.blockedEnemies = [];
+    this.blockHitFlash = 0;
     const pos = cellCenter(c, r);
     this.x = pos.x; this.y = pos.y;
   }
@@ -63,7 +71,49 @@ export class Tower {
       this.level++;
       leveled = true;
     }
+    if (leveled) this.refillBlocker();
     return leveled;
+  }
+
+  deployAsBlocker() {
+    if (this.kind !== 'base' || this.char !== '兵') return false;
+    this.blocking = true;
+    this.dead = false;
+    this.refillBlocker();
+    return true;
+  }
+
+  leaveBlocker() {
+    this.releaseBlockedEnemies();
+    this.blocking = false;
+    this.blockHp = 0;
+    this.blockMaxHp = 0;
+    this.blockCapacity = 0;
+  }
+
+  refillBlocker() {
+    if (!this.blocking) return false;
+    const stats = blockStats(this.tier, this.level);
+    this.blockMaxHp = stats.maxHp;
+    this.blockHp = stats.maxHp;
+    this.blockCapacity = stats.capacity;
+    return true;
+  }
+
+  takeBlockDamage(damage) {
+    if (!this.blocking || this.dead) return false;
+    this.blockHp = Math.max(0, this.blockHp - damage);
+    this.blockHitFlash = 0.18;
+    if (this.blockHp > 0) return false;
+    this.dead = true;
+    this.releaseBlockedEnemies();
+    return true;
+  }
+
+  releaseBlockedEnemies() {
+    const assigned = this.blockedEnemies.slice();
+    this.blockedEnemies.length = 0;
+    for (const enemy of assigned) enemy.releaseFromBlocker(this);
   }
 
   applyStun(duration) {
@@ -79,7 +129,9 @@ export class Tower {
     this.stunTimer = stun.stunTimer;
     this.stunImmuneTimer = stun.stunImmuneTimer;
     if (this.flash > 0) this.flash -= dt;
+    if (this.blockHitFlash > 0) this.blockHitFlash -= dt;
     if (stun.stunned) return 0;
+    if (this.blocking) return 0;
     if (this.inert) return 0;
     const wb = ctx2.unitGear ? ctx2.unitGear[this.char] : null;
     const s = this.stats(itemBuffs, wb);
@@ -236,7 +288,19 @@ export class Tower {
       ctx.fillText(this.buffChars.join(''), this.x, this.y - 44);
     }
     this.renderStunStatus(ctx);
+    if (this.blocking) this.renderBlockStatus(ctx);
     ctx.restore();
+  }
+
+  renderBlockStatus(ctx) {
+    const width = 68;
+    ctx.fillStyle = '#251b18';
+    ctx.fillRect(this.x - width / 2, this.y + 42, width, 8);
+    ctx.fillStyle = this.blockHitFlash > 0 ? '#ff805c' : '#65c77a';
+    ctx.fillRect(this.x - width / 2, this.y + 42, width * Math.max(0, this.blockHp / this.blockMaxHp), 8);
+    ctx.fillStyle = '#f4d9a2';
+    ctx.font = 'bold 17px KaiTi, STKaiti, serif';
+    ctx.fillText(this.blockedEnemies.length + '/' + this.blockCapacity, this.x, this.y + 62);
   }
 
   renderStunStatus(ctx) {

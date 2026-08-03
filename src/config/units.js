@@ -29,6 +29,17 @@ export const ADV_CHARS = {
 // 刷新池中基础兵种权重
 export const BASE_WEIGHTS = { '兵': 30, '骑': 20, '枪': 20, '弓': 18, '炮': 12 };
 
+// 道路阻挡数值：生命、容量与敌军攻击统一在此调整
+export const BLOCKING = {
+  baseHp: 140,
+  tierHpMul: 1.7,
+  levelHpStep: 0.12,
+  maxCapacity: 4,
+  attackInterval: 1,
+  enemyDamageRate: 0.025,
+  minEnemyDamage: 4,
+};
+
 // 阶数曲线：攻击力倍率 / 攻速倍率（interval 乘数）
 export const tierAtkMul = (tier) => Math.pow(1.6, tier - 1);
 export const tierIntervalMul = (tier) => Math.pow(0.9, tier - 1);

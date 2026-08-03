@@ -14,6 +14,7 @@ import { pointAt } from './path.js';
 import { LORD_HP, WAVE_REST, FIRST_WAVE_DELAY, waveConfig } from '../config/waves.js';
 import { resolveDiff } from '../config/difficulty.js';
 import { claimBossCompletion } from './progression.js';
+import { assignBlockers } from './blocking.js';
 import { pointToCell, cellCenter, CELL } from '../config/map.js';
 import { BASE_UNITS, ADV_CHARS } from '../config/units.js';
 import { HEROES, PREFIX_BUFFS, HERO_NAMES } from '../config/words.js';
@@ -314,6 +315,7 @@ export class BattleScene {
           const item = ITEMS[a.id];
           cell.tower.tier++;
           cell.tower.cool = 0;
+          cell.tower.refillBlocker();
           a.cd = item.cooldownAt ? item.cooldownAt(a.level) : (item.cooldown || 20);
           Audio.merge();
           this.effects.ring(cell.tower.x, cell.tower.y, '#7fe08a', 16, 280);
@@ -338,9 +340,8 @@ export class BattleScene {
       }
       if (!cellPos) return;
       const cell = this.grid.get(cellPos.c, cellPos.r);
-      if (!cell || cell.kind !== 'slot' || !cell.active) return;
       const item = this.bar.slots[drag.index];
-      if (!item) return;
+      if (!item || !this.grid.allowsUnit(item, cellPos.c, cellPos.r)) return;
       if (cell.tower) {
         // 可合成优先，否则与格上塔交换（塔收回栏位，字部署上格）
         if (canMerge(cell.tower, item)) {
@@ -373,6 +374,7 @@ export class BattleScene {
         Audio.place();
         this.afterBoardChange();
       } else {
+        if (!this.grid.allowsUnit(item, src.c, src.r)) return;
         const oc = src.c, or = src.r;
         this.bar.slots[slotIdx] = { char: src.char, kind: src.kind, tier: src.tier, level: src.level, xp: src.xp };
         this.removeTower(src);
@@ -384,7 +386,7 @@ export class BattleScene {
     }
     if (!cellPos) return;
     const cell = this.grid.get(cellPos.c, cellPos.r);
-    if (!cell || cell.kind !== 'slot') return;
+    if (!cell || !this.grid.allowsUnit(src, cellPos.c, cellPos.r)) return;
     if (cell.tower === src) return;
     if (cell.tower) {
       if (canMerge(cell.tower, src)) {
@@ -398,13 +400,10 @@ export class BattleScene {
         // 互换位置
         const dst = cell.tower;
         const oc = src.c, or = src.r;
+        if (!this.grid.allowsUnit(dst, oc, or)) return;
         const srcCell = this.grid.get(oc, or);
-        src.c = dst.c; src.r = dst.r;
-        dst.c = oc; dst.r = or;
-        let p = cellCenter(src.c, src.r);
-        src.x = p.x; src.y = p.y;
-        p = cellCenter(dst.c, dst.r);
-        dst.x = p.x; dst.y = p.y;
+        this.moveTower(src, dst.c, dst.r);
+        this.moveTower(dst, oc, or);
         cell.tower = src;
         if (srcCell) srcCell.tower = dst;
         Audio.place();
@@ -412,13 +411,11 @@ export class BattleScene {
       }
       return;
     }
-    if (!cell.active) return;
+    if (!this.grid.canPlace(src, cellPos.c, cellPos.r)) return;
     // 移动到空格
     const oldCell = this.grid.get(src.c, src.r);
     if (oldCell) oldCell.tower = null;
-    src.c = cellPos.c; src.r = cellPos.r;
-    const pos = cellCenter(cellPos.c, cellPos.r);
-    src.x = pos.x; src.y = pos.y;
+    this.moveTower(src, cellPos.c, cellPos.r);
     cell.tower = src;
     Audio.place();
     this.afterBoardChange();
@@ -429,6 +426,7 @@ export class BattleScene {
     const tower = new Tower(item.char, item.tier || 1, c, r, item.kind);
     tower.level = item.level || 1;
     tower.xp = item.xp || 0;
+    if (this.grid.get(c, r).kind === 'path') tower.deployAsBlocker();
     this.grid.get(c, r).tower = tower;
     this.towers.push(tower);
     this.effects.ring(tower.x, tower.y, '#c9a86a', 10, 200);
@@ -463,6 +461,7 @@ export class BattleScene {
       tower.xp = item.xp;
     }
     tower.cool = 0;
+    tower.refillBlocker();
     Audio.merge();
     this.effects.ring(tower.x, tower.y, '#ffd75a', 16, 280);
     this.effects.damageText(tower.x, tower.y - 56, tower.tier + ' 阶!', '#ffd75a', 30);
@@ -470,10 +469,23 @@ export class BattleScene {
   }
 
   removeTower(t) {
+    if (t.blocking) t.leaveBlocker();
     const cell = this.grid.get(t.c, t.r);
     if (cell && cell.tower === t) cell.tower = null;
     const idx = this.towers.indexOf(t);
     if (idx >= 0) this.towers.splice(idx, 1);
+  }
+
+  moveTower(tower, c, r) {
+    const destination = this.grid.get(c, r);
+    const enteringRoad = destination && destination.kind === 'path';
+    if (tower.blocking && !enteringRoad) tower.leaveBlocker();
+    tower.c = c;
+    tower.r = r;
+    const pos = cellCenter(c, r);
+    tower.x = pos.x;
+    tower.y = pos.y;
+    if (!tower.blocking && enteringRoad) tower.deployAsBlocker();
   }
 
   afterBoardChange() {
@@ -609,10 +621,26 @@ export class BattleScene {
       }
     }
 
-    // 敌人
+    // 先分配阻挡，再更新敌军：新被拦住的敌人本帧即停止移动。
+    assignBlockers(this.towers, this.enemies);
+    const blockedAtFrameStart = new Set(this.enemies.filter((enemy) => enemy.blocker));
+
+    // 敌人（阻挡攻击独立于将士眩晕状态）
     for (const e of this.enemies) {
       if (e.dead) continue;
-      e.update(dt);
+      e.update(dt, {
+        holdPosition: blockedAtFrameStart.has(e),
+        onBlockHit: (enemy, blocker, damage) => {
+          this.effects.tracer(enemy.x, enemy.y, blocker.x, blocker.y, '#ffb15c');
+          this.effects.damageText(blocker.x, blocker.y - 52, '-' + damage, '#ff805c', 22);
+        },
+        onBlockerDeath: (blocker) => {
+          this.effects.burst(blocker.x, blocker.y, '#c9a86a', 12, 220);
+          this.effects.shake(4, 0.12);
+          if (this.selected === blocker) this.selected = null;
+          this.removeTower(blocker);
+        },
+      });
       this.updateEnemySkill(e, dt);
       if (e.reached && !e.dead) {
         e.dead = true;
@@ -840,6 +868,10 @@ export class BattleScene {
          '攻击 ' + Math.round(s.atk) + ' · 攻速 ' + (1 / s.interval).toFixed(2) + '/s · 射程 ' + s.range.toFixed(1)]
       : ['阶数 ' + puppet.tier + ' · Lv' + puppet.level + '（经验 ' + Math.floor(puppet.xp) + '）',
          '攻击 ' + Math.round(s.atk) + ' · 攻速 ' + (1 / s.interval).toFixed(2) + '/s · 射程 ' + s.range.toFixed(1)];
+    if (!isGroup && puppet.blocking) {
+      lines[1] = '阻挡生命 ' + Math.ceil(puppet.blockHp) + '/' + puppet.blockMaxHp
+        + ' · 容量 ' + puppet.blockedEnemies.length + '/' + puppet.blockCapacity;
+    }
     if (!isGroup && puppet.buffChars.length > 0) lines.push('词组强化：' + puppet.buffChars.join(' '));
     if (isGroup) lines.push('成员：' + this.selected.members.map((m) => m.char + m.tier + '阶').join(' '));
     const desc = isGroup ? (HEROES[this.selected.name] || {}).desc : (puppet.base || {}).desc;

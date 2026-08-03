@@ -30,6 +30,18 @@ export class Grid {
     return false;
   }
 
+  allowsUnit(unit, c, r) {
+    const cell = this.get(c, r);
+    if (!cell || !unit) return false;
+    if (cell.kind === 'path') return unit.kind === 'base' && unit.char === '兵';
+    return cell.active;
+  }
+
+  canPlace(unit, c, r) {
+    const cell = this.get(c, r);
+    return Boolean(cell && !cell.tower && this.allowsUnit(unit, c, r));
+  }
+
   // 供词组扫描用：返回格上的文字（将士/进阶字）
   charAt(c, r) {
     const cell = this.get(c, r);

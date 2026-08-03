@@ -1,6 +1,8 @@
 // 怪物：沿路径移动，到达终点扣主公生命
 import { pointAt, speedPx, PATH_TOTAL } from './path.js';
 import { CELL } from '../config/map.js';
+import { BLOCKING } from '../config/units.js';
+import { blockDamage } from './blocking.js';
 
 let nextId = 1;
 
@@ -26,10 +28,42 @@ export class Enemy {
     this.slowFactor = 1;
     this.dead = false;
     this.reached = false;
+    this.blocker = null;
+    this.blockAttackTimer = BLOCKING.attackInterval;
+    this.blockAttackFlash = 0;
   }
 
-  update(dt) {
+  setBlocker(blocker) {
+    if (this.blocker === blocker) return;
+    this.blocker = blocker;
+    this.blockAttackTimer = BLOCKING.attackInterval;
+  }
+
+  releaseFromBlocker(expected = null) {
+    if (expected && this.blocker !== expected) return false;
+    if (!this.blocker) return false;
+    this.blocker = null;
+    return true;
+  }
+
+  update(dt, context = {}) {
     if (this.slowTimer > 0) this.slowTimer -= dt;
+    if (this.blockAttackFlash > 0) this.blockAttackFlash -= dt;
+    if (context.holdPosition && !this.blocker) return;
+    if (this.blocker && this.blocker.blocking && !this.blocker.dead) {
+      this.blockAttackTimer -= dt;
+      while (this.blockAttackTimer <= 1e-9 && this.blocker && !this.blocker.dead) {
+        const blocker = this.blocker;
+        const damage = blockDamage(this);
+        this.blockAttackTimer += BLOCKING.attackInterval;
+        this.blockAttackFlash = 0.16;
+        const died = blocker.takeBlockDamage(damage);
+        if (context.onBlockHit) context.onBlockHit(this, blocker, damage);
+        if (died && context.onBlockerDeath) context.onBlockerDeath(blocker);
+      }
+      return;
+    }
+    if (this.blocker) this.releaseFromBlocker();
     const factor = this.slowTimer > 0 ? this.slowFactor : 1;
     this.dist += this.speed * factor * dt;
     const p = pointAt(this.dist);
@@ -59,6 +93,13 @@ export class Enemy {
     ctx.strokeStyle = '#2a2033';
     ctx.lineWidth = 3;
     ctx.stroke();
+    if (this.blockAttackFlash > 0) {
+      ctx.strokeStyle = '#ffb15c';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, r + 7, -0.75 * Math.PI, 0.15 * Math.PI);
+      ctx.stroke();
+    }
     ctx.fillStyle = this.type === 'normal' ? '#c0b0d8' : '#fff0c4';
     ctx.font = 'bold ' + Math.round(30 * this.scale) + 'px KaiTi, STKaiti, serif';
     ctx.textAlign = 'center';

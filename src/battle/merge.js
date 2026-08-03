@@ -14,4 +14,5 @@ export function mergeInto(dst, src) {
     dst.xp = src.xp;
   }
   dst.cool = 0;
+  if (dst.refillBlocker) dst.refillBlocker();
 }
