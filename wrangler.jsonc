@@ -7,6 +7,11 @@
     "binding": "ASSETS",
     "run_worker_first": ["/api/*"]
   },
+  "vars": {
+    "APP_ORIGIN": "https://sheepgame.top",
+    "PASSWORD_KDF_VERSION": "PBKDF2-SHA-256-v1",
+    "PASSWORD_KDF_ITERATIONS": "120000"
+  },
   "ratelimits": [
     {
       "name": "REGISTER_LIMIT",
@@ -31,6 +36,8 @@
   ],
   "env": {
     "preview": {
+      "name": "wordward-game-preview",
+      "vars": { "APP_ORIGIN": "https://preview.sheepgame.top", "PASSWORD_KDF_VERSION": "PBKDF2-SHA-256-v1", "PASSWORD_KDF_ITERATIONS": "120000", "TURNSTILE_SITE_KEY": "" },
       "d1_databases": [
         {
           "binding": "DB",
@@ -47,6 +54,8 @@
       ]
     },
     "production": {
+      "name": "wordward-game",
+      "vars": { "APP_ORIGIN": "https://sheepgame.top", "PASSWORD_KDF_VERSION": "PBKDF2-SHA-256-v1", "PASSWORD_KDF_ITERATIONS": "120000", "TURNSTILE_SITE_KEY": "" },
       "d1_databases": [
         {
           "binding": "DB",

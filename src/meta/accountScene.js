@@ -89,7 +89,9 @@ export class AccountScene {
       blurCanvasTextInput();
       this.scenes.switch('profile');
     } catch (error) {
-      this.message = error.message || '连接失败，请稍后重试';
+      if (error?.status === 429) this.message = '请求过于频繁，请稍后重试';
+      else if (error?.status === 503) this.message = '服务暂时不可用，请稍后重试';
+      else this.message = error.message || '连接失败，请稍后重试';
     } finally {
       this.busy = false;
     }
@@ -113,6 +115,8 @@ export class AccountScene {
     ctx.fillText(this.mode === 'login' ? '账号登录' : '创建账号', 375, 230);
     ctx.fillStyle = '#a8895a'; ctx.font = '24px KaiTi, serif';
     ctx.fillText('云端存档与全服军功榜', 375, 285);
+    ctx.fillStyle = '#a8895a'; ctx.font = '18px KaiTi, serif';
+    ctx.fillText('本站无密码找回功能，请妥善保管密码', 375, 325);
     drawField(ctx, 120, 390, 510, 78, '用户名', this.username, this.active === 'username');
     drawField(ctx, 120, 520, 510, 78, '密码', '•'.repeat(this.password.length), this.active === 'password');
     this.submit.draw(ctx); this.toggle.draw(ctx);

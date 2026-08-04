@@ -1,5 +1,7 @@
 # Wordward 正式环境部署手册
 
+> Cloudflare Workers is the release target for the D1 migration. The legacy Docker/PostgreSQL instructions below remain as a fallback reference only. Follow [docs/cloudflare-release.md](cloudflare-release.md) for `main`, preview/production separation, secrets, domain cutover, and rollback.
+
 本文档适用于本项目当前的正式环境，按顺序复制命令即可完成第一次部署。
 
 固定信息：

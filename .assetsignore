@@ -1,0 +1,16 @@
+worker/
+src/
+server/
+migrations/
+scripts/
+docs/
+.env*
+.dev.vars*
+*.test.js
+**/*.test.js
+**/*.spec.js
+Dockerfile
+docker-compose.yml
+wrangler.jsonc
+package*.json
+AGENTS.md

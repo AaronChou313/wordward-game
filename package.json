@@ -13,7 +13,11 @@
     "d1:migrate:preview": "wrangler d1 migrations apply wordward-preview --env preview --remote",
     "d1:migrate:production": "wrangler d1 migrations apply wordward-production --env production --remote",
     "d1:test": "vitest run worker/db",
-    "worker:test": "vitest run worker"
+    "worker:test": "vitest run worker",
+    "worker:dev": "npm run build && wrangler dev --env preview --local",
+    "worker:smoke": "node scripts/worker-smoke.mjs",
+    "verify:worker": "npm test && npm run worker:test && npm run build && wrangler deploy --dry-run --env preview",
+    "release:check": "node scripts/release-check.mjs"
   },
   "devDependencies": {
     "vite": "8.2.0",

@@ -4,6 +4,8 @@ let refreshInFlight = null;
 let refreshEpoch = null;
 let sessionEpoch = 0;
 
+import { getTurnstileToken } from './turnstile.js';
+
 export class ApiError extends Error {
   constructor(status, data) {
     super(data && data.error ? data.error : `Request failed (${status})`);
@@ -39,11 +41,11 @@ export async function apiRequest(path, options = {}) {
 }
 
 export async function register(username, password) {
-  return establishSession('/api/auth/register', username, password);
+  return establishSession('/api/auth/register', username, password, 'register');
 }
 
 export async function login(username, password) {
-  return establishSession('/api/auth/login', username, password);
+  return establishSession('/api/auth/login', username, password, 'login');
 }
 
 export async function logout() {
@@ -66,9 +68,10 @@ export function updateProfile(profile) {
   return apiRequest('/api/profile', { method: 'PUT', body: profile });
 }
 
-async function establishSession(path, username, password) {
+async function establishSession(path, username, password, action) {
+  const turnstileToken = await getTurnstileToken(action);
   const session = await apiRequest(path, {
-    method: 'POST', body: { username, password }, retry: false,
+    method: 'POST', body: { username, password, turnstileToken }, retry: false,
   });
   sessionEpoch++;
   accessToken = session.accessToken;
