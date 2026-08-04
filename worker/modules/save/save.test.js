@@ -38,6 +38,33 @@ function makeDb() {
   };
 }
 
+function makeRacingFirstSaveDb() {
+  const db = makeDb();
+  let insertCalls = 0;
+  let release;
+  const barrier = new Promise((resolve) => { release = resolve; });
+  const originalPrepare = db.prepare.bind(db);
+  db.prepare = (sql) => {
+    const statement = originalPrepare(sql);
+    if (!sql.startsWith('INSERT INTO game_saves')) return statement;
+    return {
+      bind(...params) {
+        const bound = statement.bind(...params);
+        return {
+          async first() { return bound.first(); },
+          async run() {
+            insertCalls += 1;
+            if (insertCalls === 2) release();
+            await barrier;
+            return bound.run();
+          },
+        };
+      },
+    };
+  };
+  return db;
+}
+
 async function request(app, method, body) {
   const token = await signAccessToken({ id: 'u1', username: 'alice' }, 'jwt');
   return app.request(`https://wordward.example/api/save`, {
@@ -79,7 +106,7 @@ describe('save route helpers', () => {
   });
 
   it('allows only one concurrent first save', async () => {
-    const db = makeDb();
+    const db = makeRacingFirstSaveDb();
     const app = createApp({ env: { APP_ORIGIN: 'https://wordward.example', JWT_ACCESS_SECRET: 'jwt', REFRESH_TOKEN_PEPPER: 'pepper', DB: db }, ctx: {} });
     const results = await Promise.all([
       request(app, 'PUT', { version: 0, data: { version: 2, gold: 1 } }),
@@ -87,5 +114,11 @@ describe('save route helpers', () => {
     ]);
     expect(results.filter((r) => r.status === 200)).toHaveLength(1);
     expect(results.filter((r) => r.status === 409)).toHaveLength(1);
+    const winner = results.find((r) => r.status === 200);
+    const loser = results.find((r) => r.status === 409);
+    const winnerBody = await winner.json();
+    const loserBody = await loser.json();
+    expect(winnerBody).toEqual({ version: 1, data: db.saves.get('u1') && JSON.parse(db.saves.get('u1').data_json) });
+    expect(loserBody).toMatchObject({ error: 'Save conflict', current: winnerBody });
   });
 });
