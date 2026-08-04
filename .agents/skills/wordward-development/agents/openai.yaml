@@ -1,0 +1,4 @@
+interface:
+  display_name: "Wordward 开发发布"
+  short_description: "规范 Wordward 游戏开发、测试与双环境发布"
+  default_prompt: "使用 $wordward-development 完成游戏功能并按 preview 到 production 流程发布。"

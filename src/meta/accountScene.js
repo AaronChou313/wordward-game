@@ -1,6 +1,7 @@
 import { Button } from '../ui/button.js';
 import { blurCanvasTextInput, focusCanvasTextInput } from '../ui/canvasTextInput.js';
 import { getCurrentUser, login, register, restoreSession } from '../net/apiClient.js';
+import { authenticatedSceneName } from '../startup.js';
 
 export class AccountScene {
   constructor(scenes) {
@@ -11,7 +12,6 @@ export class AccountScene {
     this.active = null;
     this.busy = false;
     this.message = '';
-    this.back = new Button(40, 36, 130, 58, '返回', () => scenes.switch('home'), { fontSize: 26 });
     this.submit = new Button(150, 700, 450, 78, '登 录', () => this.submitForm(), { fontSize: 34, bg: '#7a2a20' });
     this.toggle = new Button(150, 800, 450, 68, '没有账号？前往注册', () => this.toggleMode(), { fontSize: 24 });
   }
@@ -40,7 +40,7 @@ export class AccountScene {
     const restored = await restoreSession();
     if (this.lifecycle !== lifecycle) return;
     if (restored) {
-      this.scenes.switch('profile');
+      this.scenes.switch(authenticatedSceneName());
       return;
     }
     this.busy = false;
@@ -87,7 +87,7 @@ export class AccountScene {
       if (this.mode === 'login') await login(username, this.password);
       else await register(username, this.password);
       blurCanvasTextInput();
-      this.scenes.switch('profile');
+      this.scenes.switch(authenticatedSceneName());
     } catch (error) {
       if (error?.status === 429) this.message = '请求过于频繁，请稍后重试';
       else if (error?.status === 503) this.message = '服务暂时不可用，请稍后重试';
@@ -98,7 +98,6 @@ export class AccountScene {
   }
 
   onPointerDown(x, y) {
-    if (this.back.hitTest(x, y)) return this.back.onClick();
     if (inside(x, y, 120, 390, 510, 78)) return this.focus('username');
     if (inside(x, y, 120, 520, 510, 78)) return this.focus('password');
     if (this.submit.hitTest(x, y)) return this.submit.onClick();
@@ -109,7 +108,6 @@ export class AccountScene {
 
   render(ctx) {
     ctx.fillStyle = '#181209'; ctx.fillRect(0, 0, 750, 1334);
-    this.back.draw(ctx);
     ctx.textAlign = 'center';
     ctx.fillStyle = '#e8c35a'; ctx.font = 'bold 58px KaiTi, serif';
     ctx.fillText(this.mode === 'login' ? '账号登录' : '创建账号', 375, 230);

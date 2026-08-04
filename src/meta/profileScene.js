@@ -80,7 +80,7 @@ export class ProfileScene {
   async signOut() {
     if (this.busy) return;
     this.busy = true;
-    try { await logout(); } finally { this.busy = false; this.scenes.switch('home'); }
+    try { await logout(); } finally { this.busy = false; this.scenes.switch('account', { mode: 'login' }); }
   }
 
   onPointerDown(x, y) {

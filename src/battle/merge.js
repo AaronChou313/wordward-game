@@ -16,3 +16,13 @@ export function mergeInto(dst, src) {
   dst.cool = 0;
   if (dst.refillBlocker) dst.refillBlocker();
 }
+
+// 将士栏使用普通数据对象，不写入 Tower 专属的冷却字段。
+export function mergeBarItem(dst, src) {
+  dst.tier++;
+  if (src.level > dst.level) {
+    dst.level = src.level;
+    dst.xp = src.xp;
+  }
+  return dst;
+}
