@@ -24,6 +24,18 @@ describe('API client sessions', () => {
     expect(getAccessToken()).toBe('memory-token');
     expect(fetchMock).toHaveBeenCalledWith('/api/auth/login', expect.objectContaining({
       method: 'POST', credentials: 'include',
+      headers: expect.objectContaining({ 'X-Wordward-Request': '1' }),
+    }));
+  });
+
+  it('marks all state-changing API requests as application requests', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(response({ ok: true }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await apiRequest('/api/save', { method: 'PUT', body: { version: 1 } });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/save', expect.objectContaining({
+      headers: expect.objectContaining({ 'X-Wordward-Request': '1' }),
     }));
   });
 

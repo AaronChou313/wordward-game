@@ -3,6 +3,7 @@ let currentUser = null;
 let refreshInFlight = null;
 let refreshEpoch = null;
 let sessionEpoch = 0;
+const SAFE_METHODS = new Set(['GET', 'HEAD']);
 
 import { getTurnstileToken } from './turnstile.js';
 
@@ -98,6 +99,7 @@ async function performRefresh(epoch) {
     const response = await fetch('/api/auth/refresh', {
       method: 'POST',
       credentials: 'include',
+      headers: { 'X-Wordward-Request': '1' },
     });
     if (sessionEpoch !== epoch) return false;
     if (!response.ok) {
@@ -118,10 +120,12 @@ async function performRefresh(epoch) {
 
 function requestOptions(options) {
   const headers = { ...(options.headers || {}) };
+  const method = (options.method || 'GET').toUpperCase();
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
   if (options.body !== undefined) headers['Content-Type'] = 'application/json';
+  if (!SAFE_METHODS.has(method)) headers['X-Wordward-Request'] = '1';
   return {
-    method: options.method || 'GET',
+    method,
     credentials: 'include',
     headers,
     body: options.body === undefined ? undefined : JSON.stringify(options.body),

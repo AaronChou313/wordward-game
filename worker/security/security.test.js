@@ -90,6 +90,17 @@ describe('Worker security primitives', () => {
     expect(requireSameOrigin(new Request('https://wordward.example/api/save', { method: 'POST', headers: { 'Sec-Fetch-Site': 'cross-site' } }), env)).toMatchObject({ status: 403 });
   });
 
+  it('accepts application-marked requests from privacy browsers without trusting cross-site requests', () => {
+    const env = { APP_ORIGIN: 'https://wordward.example' };
+    const applicationHeaders = { 'X-Wordward-Request': '1' };
+
+    expect(requireSameOrigin(new Request('https://wordward.example/api/save', { method: 'POST', headers: applicationHeaders }), env)).toBeNull();
+    expect(requireSameOrigin(new Request('https://wordward.example/api/save', { method: 'POST', headers: { ...applicationHeaders, Origin: 'null' } }), env)).toBeNull();
+    expect(requireSameOrigin(new Request('https://wordward.example/api/save', { method: 'POST', headers: { ...applicationHeaders, 'Sec-Fetch-Site': 'cross-site' } }), env)).toMatchObject({ status: 403 });
+    expect(requireSameOrigin(new Request('https://wordward.example/api/save', { method: 'POST', headers: { ...applicationHeaders, Origin: 'https://evil.example' } }), env)).toMatchObject({ status: 403 });
+    expect(requireSameOrigin(new Request('https://evil.example/api/save', { method: 'POST', headers: applicationHeaders }), env)).toMatchObject({ status: 403 });
+  });
+
   it('fails closed for unsafe API requests when the app origin is unavailable or malformed', () => {
     const request = new Request('https://wordward.example/api/save', { method: 'POST' });
     expect(requireSameOrigin(request, {})).toMatchObject({ status: 403 });

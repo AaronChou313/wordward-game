@@ -96,6 +96,8 @@ export class AccountScene {
     if (this.busy) return;
     const credentials = validateAccountCredentials(this.username, this.password);
     if (credentials.error) return void (this.message = credentials.error);
+    this.active = null;
+    resetCanvasTextInput();
     this.busy = true;
     this.message = '连接中…';
     try {
