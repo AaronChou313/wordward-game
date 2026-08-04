@@ -55,4 +55,26 @@ describe('Worker authentication schemas', () => {
     expect(first.token.token).toBeTruthy();
     await expect(rotateRefreshToken(db, 'token', 'pepper')).rejects.toMatchObject({ status: 401, code: 'INVALID_REFRESH_TOKEN' });
   });
+
+  it('allows exactly one concurrent refresh rotation and rejects the race loser', async () => {
+    const state = { revoked: false };
+    const current = { id: 'r1', user_id: 'u1', token_hash: '', revoked_at: null, rotated_to_id: null, expires_at: Date.now() + 100000, status: 'ACTIVE', username: 'alice', merit_total: 0, merit_reached_at: null, password_hash: '', password_salt: '', password_kdf: 'v1', password_iterations: 1000, user_created_at: 1, user_updated_at: 1 };
+    const db = {
+      prepare() {
+        return { bind() { return { first: async () => (state.revoked ? { ...current, revoked_at: Date.now() } : current), run: async () => ({ meta: { changes: 0 } }) }; } };
+      },
+      batch: async () => {
+        if (state.revoked) return [{ meta: { changes: 0 } }, { meta: { changes: 0 } }];
+        state.revoked = true;
+        return [{ meta: { changes: 1 } }, { meta: { changes: 1 } }];
+      },
+    };
+    const results = await Promise.allSettled([
+      rotateRefreshToken(db, 'token', 'pepper'),
+      rotateRefreshToken(db, 'token', 'pepper'),
+    ]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    const rejected = results.find((result) => result.status === 'rejected');
+    expect(rejected?.reason).toMatchObject({ status: 401, code: 'INVALID_REFRESH_TOKEN' });
+  });
 });
