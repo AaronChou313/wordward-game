@@ -25,6 +25,28 @@ function port(env) {
   return value;
 }
 
+function appOrigin(env, nodeEnv) {
+  const value = env.APP_ORIGIN;
+  if (!value) {
+    if (nodeEnv === 'production') throw new Error('APP_ORIGIN is required');
+    return null;
+  }
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error('APP_ORIGIN must be an HTTPS origin');
+  }
+  if (nodeEnv === 'production' && parsed.protocol !== 'https:') {
+    throw new Error('APP_ORIGIN must be an HTTPS origin');
+  }
+  if (!['http:', 'https:'].includes(parsed.protocol)
+    || value !== parsed.origin || parsed.username || parsed.password) {
+    throw new Error('APP_ORIGIN must contain only scheme and host');
+  }
+  return parsed.origin;
+}
+
 export function loadConfig(env = process.env) {
   const nodeEnv = env.NODE_ENV || 'development';
   if (!['development', 'test', 'production'].includes(nodeEnv)) {
@@ -38,5 +60,6 @@ export function loadConfig(env = process.env) {
     databaseUrl: required(env, 'DATABASE_URL'),
     jwtAccessSecret: secret(env, 'JWT_ACCESS_SECRET'),
     refreshTokenPepper: secret(env, 'REFRESH_TOKEN_PEPPER'),
+    appOrigin: appOrigin(env, nodeEnv),
   });
 }

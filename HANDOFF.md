@@ -4,19 +4,20 @@
 
 This repository is a Three Kingdoms-themed Chinese character tower-defense game. It runs entirely in the browser with Vite, plain ES modules, and Canvas 2D. The current handoff branch is `feature/gameplay-overhaul`, based on `master`, and the remote is `git@github.com:AaronChou313/wordward-game.git`.
 
-The battle-core milestone, all six progression tasks, and Online Tasks 1–6 are implemented and independently reviewed. The online milestone now includes the API/database scaffold, secure sessions, profiles, resilient cloud saves, server-validated merit claims, the global leaderboard, and a production container/operations stack. Online Task 7 (the security release gate) remains; do not treat the milestone as publicly released until it is complete.
+The battle-core milestone, all six progression tasks, and all seven online tasks are implemented and independently reviewed. The online milestone includes the API/database scaffold, secure sessions, profiles, resilient cloud saves, server-validated merit claims, the global leaderboard, the production container/operations stack, and the final security release gate. The code is ready for the documented production deployment; the public server rollout and browser smoke test remain operational steps.
 
 ## Technology and Commands
 
 - Runtime: browser, Canvas 2D, ES modules
-- Tooling: Node.js, Vite 5.4, Vitest 2.1.9
-- Install: `npm install`
+- Tooling: Node.js 22, Vite 8.2.0, Vitest 4.1.10
+- Install: `npm ci` and `npm --prefix server ci`
 - Develop: `npm run dev`
-- Test: `npm test`
+- Client test: `npm test`
+- API test: `npm --prefix server test`
 - Production build: `npm run build`
 - Preview build: `npm run preview`
 
-Latest verified result before this handoff: 26 test files, 232 tests passed across the client and API suites; Vite production build passed with 56 transformed modules; Prisma schema validation, Compose config validation, the container smoke scenario, and `git diff --check` passed.
+Latest verified result before this handoff: 18 client files / 175 tests passed; 9 API files / 69 tests passed, with the opt-in PostgreSQL file skipped in the ordinary API run. The skipped PostgreSQL 16 Serializable concurrency scenario was then run separately against a temporary migrated database and passed 1/1. Vite production build passed with 57 transformed modules; Prisma schema validation, checksum-verified Docker Compose v5.3.1 config validation, both production dependency audits, deployment-script syntax checks, and `git diff --check` passed.
 
 ## Repository Layout
 
@@ -237,7 +238,7 @@ The focused commit subject is `feat: add validated merit leaderboard`. The imple
 
 Manual Canvas QA verified the home ranking entry, loading/error layout, and a clean browser console. Independent review found and resolved cursor/token confusion, weak battle bounds, queue ordering, local backfill, legal cross-run continuation, and concurrent checkpoint rollback. Final review reported no Critical or Important issues and Ready: Yes.
 
-Verification passed 25 test files / 225 tests, the Vite build transformed 56 modules, Prisma schema validation passed, and `git diff --check` passed. Remaining release-gate work is a real PostgreSQL Serializable concurrency scenario, a unified server retry policy for transient `P2034`, a retention policy for stale run checkpoints, and filtering/handling disabled accounts in public rankings. Next implement Online Task 6 deployment and operations.
+Verification passed 25 test files / 225 tests, the Vite build transformed 56 modules, Prisma schema validation passed, and `git diff --check` passed. The later Online Task 7 release gate completed the real PostgreSQL concurrency scenario, unified `P2034` retry handling, stale checkpoint retention, and disabled-account ranking behavior.
 
 ## Completed: Online Task 6
 
@@ -255,9 +256,17 @@ Local verification used a checksum-verified standalone Docker Compose v5.1.4 bin
 
 The authorized `aaron-cloud` host was inspected before changes: it was an otherwise idle Ubuntu 22.04 server with about 890 MiB RAM, no swap, and no Docker. The official Docker repository was installed (Docker 29.7.1, Compose 5.3.1), a persistent 2 GiB `/swapfile` was added after backing up `/etc/fstab` to `/etc/fstab.wordward-predeploy`, and an isolated checkout was staged at `/root/wordward-smoke`. Parallel image construction overloaded the single small host, so it was stopped and the documented sequential Web/API build completed successfully. PostgreSQL, API, and Web then reached healthy status on loopback port 18080, non-root UIDs were confirmed, and the full smoke script passed.
 
-The loopback-only smoke stack and its test database are intentionally retained for Online Task 7's real PostgreSQL concurrency and backup/restore drills. They must be removed before the final clean production deployment. The server currently has no configured public hostname or TLS terminator; do not expose the Secure-cookie account flow over plain HTTP. Dependency audit findings printed during image construction also remain for Task 7 resolution.
+The original loopback-only smoke host was superseded because its 1 GiB memory was insufficient for reliable deployment work. The final deployment target is the Ubuntu 22.04 server documented in `docs/deployment.md`, using `sheepgame.top` behind Caddy HTTPS. Do not expose the Secure-cookie account flow over plain HTTP.
 
-Verification passed 26 test files / 232 tests, the Vite build transformed 56 modules, Prisma validation passed, official Compose config validation passed, both images built, all three services were healthy, the five-step application smoke passed, and `git diff --check` passed. Next implement Online Task 7 security and release verification.
+Verification passed 26 test files / 232 tests, the Vite build transformed 56 modules, Prisma validation passed, official Compose config validation passed, both images built, all three services were healthy, the five-step application smoke passed, and `git diff --check` passed.
+
+## Completed: Online Task 7
+
+The security release gate adds production-only HTTPS origin validation and credentialed CORS, filters disabled accounts from public ranking and authenticated rank calculations, retries transient PostgreSQL Serializable conflicts, removes stale run checkpoints, prunes API image development dependencies, and keeps migration tooling available at runtime.
+
+The release workflow now includes a detailed Ubuntu 22.04 deployment guide for `sheepgame.top`, Caddy-managed HTTPS, loopback-only Compose publishing, safe GitHub SSH pulls, sequential low-memory image builds, validated atomic database backups through `deploy/backup.sh`, disposable restore drills, update and rollback procedures, and explicit dangerous-command warnings.
+
+Final release verification passed 18 client files / 175 tests and 9 API files / 69 tests. The opt-in PostgreSQL 16 Serializable concurrency test passed 1/1 against a temporary database after the production migration was applied. Vite transformed 57 modules, Prisma validation passed, Compose v5.3.1 config validation passed, both production dependency audits reported zero vulnerabilities, and shell/Git checks passed.
 
 ## Verification and Manual QA
 

@@ -10,6 +10,8 @@ const UNLOCK_REQUIREMENTS = {
   hard: { difficulty: 'normal', endlessFloor: 1, bossWave: 30 },
   endless: { difficulty: 'hard', endlessFloor: 1, bossWave: 30 },
 };
+const RUN_CHECKPOINT_TTL_MS = 48 * 60 * 60 * 1000;
+const TRANSACTION_ATTEMPTS = 3;
 
 export class MeritClaimError extends Error {
   constructor(message, code = 'INVALID_CLAIM', statusCode = 400) {
@@ -27,54 +29,71 @@ export function meritForClaim(difficulty, bossWave) {
 
 export async function recordMeritClaim(prisma, userId, input, now = new Date()) {
   const normalized = normalizeClaim(input, now);
-  try {
-    return await prisma.$transaction(async (tx) => {
-      const user = await tx.user.findUnique({ where: { id: userId } });
-      if (!user || user.status !== 'ACTIVE') {
-        throw new MeritClaimError('Account unavailable', 'ACCOUNT_UNAVAILABLE', 403);
-      }
+  let lastError;
+  for (let attempt = 0; attempt < TRANSACTION_ATTEMPTS; attempt++) {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const user = await tx.user.findUnique({ where: { id: userId } });
+        if (!user || user.status !== 'ACTIVE') {
+          throw new MeritClaimError('Account unavailable', 'ACCOUNT_UNAVAILABLE', 403);
+        }
 
-      const existing = await findClaim(tx, userId, normalized);
-      await assertProgression(tx, userId, normalized);
-      await advanceRunCheckpoint(tx, userId, normalized);
-      if (existing) {
-        return { awarded: false, merit: existing.merit, meritTotal: user.meritTotal };
-      }
+        await tx.meritRunCheckpoint.deleteMany({
+          where: {
+            userId,
+            runId: { not: normalized.runId },
+            updatedAt: { lt: new Date(now.getTime() - RUN_CHECKPOINT_TTL_MS) },
+          },
+        });
+        const existing = await findClaim(tx, userId, normalized);
+        await assertProgression(tx, userId, normalized);
+        await advanceRunCheckpoint(tx, userId, normalized);
+        if (existing) {
+          return { awarded: false, merit: existing.merit, meritTotal: user.meritTotal };
+        }
 
-      const merit = meritForClaim(normalized.difficulty, normalized.bossWave);
-      await tx.meritClaim.create({
-        data: {
-          userId,
-          difficulty: databaseDifficulty(normalized.difficulty),
-          endlessFloor: normalized.endlessFloor,
-          bossWave: normalized.bossWave,
-          merit,
-          runId: normalized.runId,
-          seed: normalized.seed,
-          startedAt: normalized.startedAt,
-          finishedAt: normalized.finishedAt,
-          summary: normalized.summary,
-        },
-      });
-      const updated = await tx.user.update({
-        where: { id: userId },
-        data: { meritTotal: { increment: merit }, meritReachedAt: now },
-      });
-      return { awarded: true, merit, meritTotal: updated.meritTotal };
-    }, { isolationLevel: 'Serializable' });
-  } catch (error) {
-    if (error && error.code === 'P2002') {
-      const [existing, user] = await Promise.all([
-        findClaim(prisma, userId, normalized),
-        prisma.user.findUnique({ where: { id: userId } }),
-      ]);
-      if (existing && user) {
-        await repairRunCheckpoint(prisma, userId, normalized);
-        return { awarded: false, merit: existing.merit, meritTotal: user.meritTotal };
+        const merit = meritForClaim(normalized.difficulty, normalized.bossWave);
+        await tx.meritClaim.create({
+          data: {
+            userId,
+            difficulty: databaseDifficulty(normalized.difficulty),
+            endlessFloor: normalized.endlessFloor,
+            bossWave: normalized.bossWave,
+            merit,
+            runId: normalized.runId,
+            seed: normalized.seed,
+            startedAt: normalized.startedAt,
+            finishedAt: normalized.finishedAt,
+            summary: normalized.summary,
+          },
+        });
+        const updated = await tx.user.update({
+          where: { id: userId },
+          data: { meritTotal: { increment: merit }, meritReachedAt: now },
+        });
+        return { awarded: true, merit, meritTotal: updated.meritTotal };
+      }, { isolationLevel: 'Serializable' });
+    } catch (error) {
+      lastError = error;
+      if (error && error.code === 'P2034' && attempt + 1 < TRANSACTION_ATTEMPTS) continue;
+      if (error && error.code === 'P2002') {
+        const recovered = await recoverUniqueRace(prisma, userId, normalized);
+        if (recovered) return recovered;
       }
+      throw error;
     }
-    throw error;
   }
+  throw lastError;
+}
+
+async function recoverUniqueRace(prisma, userId, claim) {
+  const [existing, user] = await Promise.all([
+    findClaim(prisma, userId, claim),
+    prisma.user.findUnique({ where: { id: userId } }),
+  ]);
+  if (!existing || !user) return null;
+  await repairRunCheckpoint(prisma, userId, claim);
+  return { awarded: false, merit: existing.merit, meritTotal: user.meritTotal };
 }
 
 function normalizeClaim(input, now) {

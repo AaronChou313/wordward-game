@@ -1,4 +1,5 @@
 import cookie from '@fastify/cookie';
+import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
 import rateLimit from '@fastify/rate-limit';
 import Fastify from 'fastify';
@@ -35,6 +36,10 @@ export function buildApp(options = {}) {
     await request.jwtVerify();
   });
   app.register(cookie);
+  app.register(cors, {
+    origin: config.appOrigin || false,
+    credentials: Boolean(config.appOrigin),
+  });
   app.register(jwt, { secret: config.jwtAccessSecret });
   app.register(rateLimit, {
     global: true,

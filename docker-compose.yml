@@ -36,6 +36,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}
       REFRESH_TOKEN_PEPPER: ${REFRESH_TOKEN_PEPPER:?REFRESH_TOKEN_PEPPER is required}
+      APP_ORIGIN: ${APP_ORIGIN:?APP_ORIGIN is required}
     depends_on:
       db:
         condition: service_healthy

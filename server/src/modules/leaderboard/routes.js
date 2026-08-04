@@ -7,6 +7,7 @@ export async function leaderboardRoutes(app) {
       include: { profile: true },
     });
     if (!user) return reply.code(404).send({ error: 'User not found' });
+    if (user.status !== 'ACTIVE') return reply.code(403).send({ error: 'Account unavailable' });
     if (user.meritTotal <= 0 || !user.meritReachedAt) return leaderboardRow(user, null);
 
     const ahead = await app.prisma.user.count({ where: aheadOf(user) });
@@ -25,7 +26,7 @@ export async function leaderboardRoutes(app) {
     }
 
     const users = await app.prisma.user.findMany({
-      where: cursor ? afterCursor(cursor) : { meritTotal: { gt: 0 } },
+      where: cursor ? afterCursor(cursor) : { status: 'ACTIVE', meritTotal: { gt: 0 } },
       orderBy: [
         { meritTotal: 'desc' },
         { meritReachedAt: 'asc' },
@@ -66,6 +67,7 @@ function afterCursor(cursor) {
   const reachedAt = new Date(cursor.meritReachedAt);
   return {
     AND: [
+      { status: 'ACTIVE' },
       { meritTotal: { gt: 0 } },
       {
         OR: [
@@ -80,10 +82,13 @@ function afterCursor(cursor) {
 
 function aheadOf(user) {
   return {
-    OR: [
-      { meritTotal: { gt: user.meritTotal } },
-      { meritTotal: user.meritTotal, meritReachedAt: { lt: user.meritReachedAt } },
-      { meritTotal: user.meritTotal, meritReachedAt: user.meritReachedAt, id: { lt: user.id } },
+    AND: [
+      { status: 'ACTIVE' },
+      { OR: [
+        { meritTotal: { gt: user.meritTotal } },
+        { meritTotal: user.meritTotal, meritReachedAt: { lt: user.meritReachedAt } },
+        { meritTotal: user.meritTotal, meritReachedAt: user.meritReachedAt, id: { lt: user.id } },
+      ] },
     ],
   };
 }

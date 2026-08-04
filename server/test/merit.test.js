@@ -96,6 +96,16 @@ describe('server-validated merit claims', () => {
     expect(forged.statusCode).toBe(400);
   });
 
+  it('rate limits repeated merit submissions per client', async () => {
+    const responses = [];
+    for (let index = 0; index < 21; index++) {
+      responses.push(await request('user-1', claim()));
+    }
+
+    expect(responses.slice(0, 20).every((response) => response.statusCode < 400)).toBe(true);
+    expect(responses[20].statusCode).toBe(429);
+  });
+
   it('recovers idempotently when a concurrent request wins the unique-key race', async () => {
     prisma.forceDuplicateRace = true;
 
@@ -104,6 +114,30 @@ describe('server-validated merit claims', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ awarded: false, merit: 1, meritTotal: 1 });
     expect(prisma.records.claims).toHaveLength(1);
+  });
+
+  it('retries transient PostgreSQL serialization conflicts on the main claim transaction', async () => {
+    prisma.serializationFailures = 2;
+
+    const response = await request('user-1', claim());
+
+    expect(response.statusCode).toBe(201);
+    expect(prisma.transactionCalls).toBe(3);
+    expect(prisma.records.users.get('user-1').meritTotal).toBe(1);
+  });
+
+  it('removes stale run checkpoints outside the active claim window', async () => {
+    prisma.records.checkpoints.push({
+      id: 'checkpoint-stale', userId: 'user-1', runId: 'run-stale',
+      difficulty: 'EASY', endlessFloor: 1, seed: 'seed-stale',
+      startedAt: new Date('2026-07-01T00:00:00.000Z'), lastBossWave: 30,
+      lastFinishedAt: new Date('2026-07-01T00:05:00.000Z'),
+      updatedAt: new Date('2026-07-01T00:05:00.000Z'),
+    });
+
+    expect((await request('user-1', claim())).statusCode).toBe(201);
+
+    expect(prisma.records.checkpoints.map((entry) => entry.runId)).toEqual(['run-0001']);
   });
 
   it('restores the losing run checkpoint after a concurrent first-award race', async () => {
@@ -256,7 +290,11 @@ function memoryPrisma() {
         && entry.runId === key.runId) || null;
     },
     async create({ data }) {
-      const entry = { id: `checkpoint-${records.checkpoints.length + 1}`, ...data };
+      const entry = {
+        id: `checkpoint-${records.checkpoints.length + 1}`,
+        updatedAt: new Date(),
+        ...data,
+      };
       records.checkpoints.push(entry);
       return entry;
     },
@@ -265,13 +303,29 @@ function memoryPrisma() {
       const entry = records.checkpoints.find((candidate) => candidate.userId === key.userId
         && candidate.runId === key.runId);
       Object.assign(entry, data);
+      entry.updatedAt = new Date();
       return entry;
+    },
+    async deleteMany({ where }) {
+      const before = records.checkpoints.length;
+      records.checkpoints = records.checkpoints.filter((entry) => !(
+        entry.userId === where.userId
+        && entry.runId !== where.runId.not
+        && entry.updatedAt < where.updatedAt.lt
+      ));
+      return { count: before - records.checkpoints.length };
     },
   };
   const client = {
     records, meritClaim, meritRunCheckpoint, user,
     forceDuplicateRace: false, forceDuplicateRaceRunId: null,
+    serializationFailures: 0, transactionCalls: 0,
     async $transaction(callback) {
+      client.transactionCalls++;
+      if (client.serializationFailures > 0) {
+        client.serializationFailures--;
+        throw Object.assign(new Error('serialization conflict'), { code: 'P2034' });
+      }
       const checkpoints = records.checkpoints.map((entry) => ({ ...entry }));
       try {
         return await callback({ meritClaim, meritRunCheckpoint, user });

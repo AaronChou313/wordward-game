@@ -13,11 +13,14 @@ COPY server/prisma ./prisma
 COPY server/prisma.config.js ./prisma.config.js
 RUN npm run prisma:generate
 
+FROM dependencies AS production-dependencies
+RUN npm prune --omit=dev
+
 FROM base AS runtime
 
 ENV NODE_ENV=production
 WORKDIR /app
-COPY --from=dependencies --chown=node:node /app/node_modules ./node_modules
+COPY --from=production-dependencies --chown=node:node /app/node_modules ./node_modules
 COPY --chown=node:node server/package.json server/package-lock.json ./
 COPY --chown=node:node server/prisma ./prisma
 COPY --chown=node:node server/prisma.config.js ./prisma.config.js

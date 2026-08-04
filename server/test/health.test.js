@@ -27,6 +27,7 @@ describe('server configuration', () => {
       databaseUrl: VALID_ENV.DATABASE_URL,
       jwtAccessSecret: VALID_ENV.JWT_ACCESS_SECRET,
       refreshTokenPepper: VALID_ENV.REFRESH_TOKEN_PEPPER,
+      appOrigin: null,
     });
   });
 
@@ -47,6 +48,17 @@ describe('server configuration', () => {
     expect(() => loadConfig({ ...VALID_ENV, PORT: 'not-a-port' }))
       .toThrow('PORT must be an integer between 1 and 65535');
   });
+
+  it('requires one exact HTTPS application origin in production', () => {
+    expect(() => loadConfig({ ...VALID_ENV, NODE_ENV: 'production' }))
+      .toThrow('APP_ORIGIN is required');
+    expect(() => loadConfig({
+      ...VALID_ENV, NODE_ENV: 'production', APP_ORIGIN: 'http://game.example.com',
+    })).toThrow('APP_ORIGIN must be an HTTPS origin');
+    expect(loadConfig({
+      ...VALID_ENV, NODE_ENV: 'production', APP_ORIGIN: 'https://game.example.com',
+    }).appOrigin).toBe('https://game.example.com');
+  });
 });
 
 describe('GET /api/health', () => {
@@ -63,7 +75,9 @@ describe('GET /api/health', () => {
 
   it('trusts forwarded client details only in the production proxy topology', async () => {
     app = buildApp({
-      config: loadConfig({ ...VALID_ENV, NODE_ENV: 'production' }),
+      config: loadConfig({
+        ...VALID_ENV, NODE_ENV: 'production', APP_ORIGIN: 'https://game.example.com',
+      }),
       logger: false,
     });
     app.get('/proxy-probe', async (request) => ({ ip: request.ip, protocol: request.protocol }));
@@ -78,5 +92,45 @@ describe('GET /api/health', () => {
     });
 
     expect(response.json()).toEqual({ ip: '203.0.113.42', protocol: 'https' });
+  });
+
+  it('ignores forged forwarding headers from an untrusted remote address', async () => {
+    app = buildApp({
+      config: loadConfig({
+        ...VALID_ENV, NODE_ENV: 'production', APP_ORIGIN: 'https://game.example.com',
+      }),
+      logger: false,
+    });
+    app.get('/untrusted-proxy-probe', async (request) => ({
+      ip: request.ip, protocol: request.protocol,
+    }));
+
+    const response = await app.inject({
+      method: 'GET', url: '/untrusted-proxy-probe', remoteAddress: '198.51.100.20',
+      headers: { 'x-forwarded-for': '203.0.113.99', 'x-forwarded-proto': 'https' },
+    });
+
+    expect(response.json()).toEqual({ ip: '198.51.100.20', protocol: 'http' });
+  });
+
+  it('emits credentialed CORS headers only for the configured application origin', async () => {
+    app = buildApp({
+      config: loadConfig({
+        ...VALID_ENV, NODE_ENV: 'production', APP_ORIGIN: 'https://game.example.com',
+      }),
+      logger: false,
+    });
+
+    const allowed = await app.inject({
+      method: 'GET', url: '/api/health', headers: { origin: 'https://game.example.com' },
+    });
+    const denied = await app.inject({
+      method: 'GET', url: '/api/health', headers: { origin: 'https://evil.example' },
+    });
+
+    expect(allowed.headers['access-control-allow-origin']).toBe('https://game.example.com');
+    expect(allowed.headers['access-control-allow-credentials']).toBe('true');
+    expect(denied.headers['access-control-allow-origin']).toBe('https://game.example.com');
+    expect(denied.headers['access-control-allow-origin']).not.toBe('https://evil.example');
   });
 });

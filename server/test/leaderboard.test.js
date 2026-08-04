@@ -33,6 +33,22 @@ describe('global merit leaderboard', () => {
     });
   });
 
+  it('excludes disabled accounts from public rows and rank calculations', async () => {
+    const publicResponse = await app.inject({ method: 'GET', url: '/api/leaderboard?limit=10' });
+    const currentUser = await app.inject({
+      method: 'GET', url: '/api/leaderboard/me',
+      headers: { authorization: `Bearer ${app.jwt.sign({ id: 'user-1' })}` },
+    });
+    const disabledUser = await app.inject({
+      method: 'GET', url: '/api/leaderboard/me',
+      headers: { authorization: `Bearer ${app.jwt.sign({ id: 'user-disabled' })}` },
+    });
+
+    expect(publicResponse.json().rows.map((entry) => entry.userId)).not.toContain('user-disabled');
+    expect(currentUser.json().rank).toBe(2);
+    expect(disabledUser.statusCode).toBe(403);
+  });
+
   it('paginates with stable global ranks and an opaque cursor', async () => {
     const first = await app.inject({ method: 'GET', url: '/api/leaderboard?limit=2' });
     const firstBody = first.json();
@@ -128,6 +144,7 @@ function leaderboardPrisma() {
     user('user-4', '翼德', 80, '2026-08-03T11:00:00.000Z'),
     user('user-3', '云长', 80, '2026-08-03T11:00:00.000Z'),
     user('user-5', '仲谋', 0, null),
+    user('user-disabled', '禁用账号', 1000, '2026-08-03T08:00:00.000Z', 'DISABLED'),
   ];
   return {
     user: {
@@ -140,9 +157,9 @@ function leaderboardPrisma() {
   };
 }
 
-function user(id, nickname, meritTotal, reachedAt) {
+function user(id, nickname, meritTotal, reachedAt, status = 'ACTIVE') {
   return {
-    id, meritTotal, meritReachedAt: reachedAt ? new Date(reachedAt) : null,
+    id, status, meritTotal, meritReachedAt: reachedAt ? new Date(reachedAt) : null,
     profile: { nickname, avatarUrl: null },
   };
 }
@@ -155,6 +172,7 @@ function compareUsers(a, b) {
 
 function matches(entry, where = {}) {
   const checks = [];
+  if (where.status !== undefined) checks.push(entry.status === where.status);
   if (where.meritTotal !== undefined) {
     if (typeof where.meritTotal === 'number') checks.push(entry.meritTotal === where.meritTotal);
     else {
