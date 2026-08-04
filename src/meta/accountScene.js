@@ -1,5 +1,5 @@
 import { Button } from '../ui/button.js';
-import { blurCanvasTextInput, focusCanvasTextInput } from '../ui/canvasTextInput.js';
+import { focusCanvasTextInput, resetCanvasTextInput } from '../ui/canvasTextInput.js';
 import { getCurrentUser, login, register, restoreSession } from '../net/apiClient.js';
 import { authenticatedSceneName } from '../startup.js';
 
@@ -13,6 +13,14 @@ export function validateAccountCredentials(usernameValue, passwordValue) {
     return { username, password, error: '密码需为 1–128 个字符' };
   }
   return { username, password, error: '' };
+}
+
+export function accountErrorMessage(error) {
+  if (error?.data?.code === 'ORIGIN_MISMATCH') return '当前访问地址不受支持，请使用本站正式域名访问';
+  if (error?.data?.code === 'TURNSTILE_FAILED') return '安全验证失败，请刷新页面后重试';
+  if (error?.status === 429) return '请求过于频繁，请稍后重试';
+  if (error?.status === 503) return '服务暂时不可用，请稍后重试';
+  return error?.message || '连接失败，请稍后重试';
 }
 
 export class AccountScene {
@@ -42,7 +50,7 @@ export class AccountScene {
     if (!params.mode) this.restore();
   }
 
-  exit() { this.lifecycle = null; blurCanvasTextInput(); }
+  exit() { this.lifecycle = null; this.active = null; resetCanvasTextInput(); }
   update() {}
 
   async restore() {
@@ -62,6 +70,8 @@ export class AccountScene {
   toggleMode() {
     this.mode = this.mode === 'login' ? 'register' : 'login';
     this.password = '';
+    this.active = null;
+    resetCanvasTextInput();
     this.message = '';
     this.syncLabels();
   }
@@ -91,12 +101,11 @@ export class AccountScene {
     try {
       if (this.mode === 'login') await login(credentials.username, credentials.password);
       else await register(credentials.username, credentials.password);
-      blurCanvasTextInput();
+      this.active = null;
+      resetCanvasTextInput();
       this.scenes.switch(authenticatedSceneName());
     } catch (error) {
-      if (error?.status === 429) this.message = '请求过于频繁，请稍后重试';
-      else if (error?.status === 503) this.message = '服务暂时不可用，请稍后重试';
-      else this.message = error.message || '连接失败，请稍后重试';
+      this.message = accountErrorMessage(error);
     } finally {
       this.busy = false;
     }

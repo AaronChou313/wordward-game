@@ -56,3 +56,13 @@ export function blurCanvasTextInput() {
   if (input) input.blur();
   setActive(false);
 }
+
+export function resetCanvasTextInput() {
+  if (input) {
+    input.value = '';
+    input.oninput = null;
+    input.onkeydown = null;
+    input.onblur = null;
+  }
+  blurCanvasTextInput();
+}

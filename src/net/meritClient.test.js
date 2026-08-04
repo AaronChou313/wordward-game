@@ -12,6 +12,17 @@ let storage;
 
 beforeEach(() => {
   storage = new Map();
+  vi.stubGlobal('document', {
+    querySelector: vi.fn(() => ({ content: 'test-site-key' })),
+    getElementById: vi.fn(() => null),
+    createElement: vi.fn(() => ({ id: '', hidden: false, dataset: {} })),
+    body: { appendChild: vi.fn() },
+  });
+  vi.stubGlobal('turnstile', {
+    render: vi.fn(() => 'test-widget'),
+    execute: vi.fn((widgetId, options) => options.callback('test-token')),
+    reset: vi.fn(),
+  });
   vi.stubGlobal('localStorage', {
     getItem: (key) => storage.get(key) ?? null,
     setItem: (key, value) => storage.set(key, value),
