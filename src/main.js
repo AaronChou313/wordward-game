@@ -15,6 +15,7 @@ import { getSave } from './meta/saveData.js';
 import { AccountScene } from './meta/accountScene.js';
 import { ProfileScene } from './meta/profileScene.js';
 import { RankingScene } from './meta/rankingScene.js';
+import { initialSceneName } from './startup.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -39,7 +40,7 @@ const view = setupInput(canvas, {
 
 preloadImages(() => {
   Audio.setVolume(getSave().settings.volume / 100);
-  scenes.switch('home');
+  scenes.switch(initialSceneName());
   startLoop(
     (dt) => scenes.update(dt),
     () => {

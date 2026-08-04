@@ -40,11 +40,16 @@ git branch --show-current
 git remote -v
 ```
 
-Workers Builds 使用 `main` 分支。确认功能分支已验证后合并：
+长期分支为 `preview` 和 `main`。功能分支先合并到 `preview`，由 Cloudflare 自动部署预览环境；验证通过后再将 `preview` 合并到 `main`，自动部署正式环境：
 
 ```bash
+git switch preview
+git merge <功能分支>
+git push origin preview
+
+# preview.sheepgame.top 验证通过后
 git switch main
-git merge feature/gameplay-overhaul
+git merge preview
 git push origin main
 ```
 
@@ -179,14 +184,14 @@ BASE_URL=https://sheepgame.top npm run release:check
 
 ## 十三、配置 GitHub 自动部署
 
-在 **Workers & Pages → Create application → Connect to Git** 设置：
+为两个 Worker 分别连接同一个 GitHub 仓库：
 
-- 仓库：`git@github.com:AaronChou313/wordward-game.git`
-- 生产分支：`main`
-- 根目录：仓库根目录
-- 构建命令：`npm run verify:worker`
-- 正式部署命令：`npm run deploy:production`
-- 预览部署命令：`npm run deploy:preview`
+| Worker | 监听分支 | 构建命令 | 部署命令 |
+| --- | --- | --- | --- |
+| `wordward-game-preview` | `preview` | `npm run verify:worker` | `npm run deploy:preview` |
+| `wordward-game` | `main` | `npm run verify:worker` | `npm run deploy:production` |
+
+仓库均为 `git@github.com:AaronChou313/wordward-game.git`，根目录均为仓库根目录。
 
 不要把 secrets 配置成 GitHub Variables；它们必须保存在 Cloudflare Worker Secrets 中。
 

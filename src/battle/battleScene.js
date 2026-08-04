@@ -7,7 +7,7 @@ import { HeroGroup } from './heroGroup.js';
 import { RefreshBar } from './refreshBar.js';
 import { createCharPool } from './charPool.js';
 import { rescan } from './wordSystem.js';
-import { canMerge, mergeInto } from './merge.js';
+import { canMerge, mergeBarItem, mergeInto } from './merge.js';
 import { Effects } from './effects.js';
 import { Score } from './score.js';
 import { pointAt } from './path.js';
@@ -34,8 +34,14 @@ import { buildMeritClaim, queueMeritClaim } from '../net/meritClient.js';
 const TOP_Y = 64, TOP_H = 56;
 const ACT_W = 132, ACT_GAP = 8, ACT_X = 39;
 // 刷新栏布局
-const SLOT_Y = 1178, SLOT_H = 92, SLOT_W = 120, SLOT_GAP = 8, SLOT_X = 39;
-const BTN_Y = 1276, BTN_H = 52;
+const SLOT_Y = 1178, SLOT_H = 84, SLOT_W = 120, SLOT_GAP = 8, SLOT_X = 39;
+const BTN_Y = 1268, BTN_H = 64;
+export const BATTLE_BAR_LAYOUT = Object.freeze({
+  slotY: SLOT_Y,
+  slotHeight: SLOT_H,
+  buttonY: BTN_Y,
+  buttonHeight: BTN_H,
+});
 // 拖拽判定阈值（小于此位移视为点选）
 const TAP_DIST = 14;
 // 设置面板音量滑条
@@ -408,13 +414,21 @@ export class BattleScene {
     }
 
     if (drag.source === 'slot') {
-      // 拖到另一个槽位：交换槽位内容
+      // 拖到另一个槽位：同字同阶直接合成，否则交换槽位内容
       if (slotIdx >= 0) {
         if (slotIdx !== drag.index) {
-          const tmp = this.bar.slots[slotIdx];
-          this.bar.slots[slotIdx] = this.bar.slots[drag.index];
-          this.bar.slots[drag.index] = tmp;
-          Audio.click();
+          const source = this.bar.slots[drag.index];
+          const target = this.bar.slots[slotIdx];
+          if (canMerge(target, source)) {
+            mergeBarItem(target, source);
+            this.bar.slots[drag.index] = null;
+            Audio.merge();
+            Toast.show(target.char + ' 合成升至 ' + target.tier + ' 阶');
+          } else {
+            this.bar.slots[slotIdx] = source;
+            this.bar.slots[drag.index] = target;
+            Audio.click();
+          }
         }
         return;
       }
