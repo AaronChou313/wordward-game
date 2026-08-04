@@ -1,75 +1,155 @@
 {
-  "name": "wordward-game",
-  "main": "worker/index.js",
-  "compatibility_date": "2024-09-23",
-  "assets": {
-    "directory": "./dist",
-    "binding": "ASSETS",
-    "run_worker_first": ["/api/*"]
-  },
-  "vars": {
-    "APP_ORIGIN": "https://sheepgame.top",
-    "PASSWORD_KDF_VERSION": "PBKDF2-SHA-256-v1",
-    "PASSWORD_KDF_ITERATIONS": "120000"
-  },
-  "ratelimits": [
-    {
-      "name": "REGISTER_LIMIT",
-      "namespace_id": "placeholder-1001",
-      "simple": { "limit": 10, "period": 60 }
-    },
-    {
-      "name": "LOGIN_IP_LIMIT",
-      "namespace_id": "placeholder-1002",
-      "simple": { "limit": 20, "period": 60 }
-    },
-    {
-      "name": "LOGIN_USER_LIMIT",
-      "namespace_id": "placeholder-1003",
-      "simple": { "limit": 10, "period": 60 }
-    },
-    {
-      "name": "MERIT_LIMIT",
-      "namespace_id": "placeholder-1004",
-      "simple": { "limit": 30, "period": 60 }
-    }
-  ],
-  "env": {
-    "preview": {
-      "name": "wordward-game-preview",
-      "vars": { "APP_ORIGIN": "https://preview.sheepgame.top", "PASSWORD_KDF_VERSION": "PBKDF2-SHA-256-v1", "PASSWORD_KDF_ITERATIONS": "120000", "TURNSTILE_SITE_KEY": "" },
-      "d1_databases": [
-        {
-          "binding": "DB",
-          "database_name": "wordward-preview",
-          "database_id": "replace-with-preview-database-id",
-          "migrations_dir": "migrations"
-        }
-      ],
-      "ratelimits": [
-        { "name": "REGISTER_LIMIT", "namespace_id": "placeholder-2001", "simple": { "limit": 10, "period": 60 } },
-        { "name": "LOGIN_IP_LIMIT", "namespace_id": "placeholder-2002", "simple": { "limit": 20, "period": 60 } },
-        { "name": "LOGIN_USER_LIMIT", "namespace_id": "placeholder-2003", "simple": { "limit": 10, "period": 60 } },
-        { "name": "MERIT_LIMIT", "namespace_id": "placeholder-2004", "simple": { "limit": 30, "period": 60 } }
-      ]
-    },
-    "production": {
-      "name": "wordward-game",
-      "vars": { "APP_ORIGIN": "https://sheepgame.top", "PASSWORD_KDF_VERSION": "PBKDF2-SHA-256-v1", "PASSWORD_KDF_ITERATIONS": "120000", "TURNSTILE_SITE_KEY": "" },
-      "d1_databases": [
-        {
-          "binding": "DB",
-          "database_name": "wordward-production",
-          "database_id": "replace-with-production-database-id",
-          "migrations_dir": "migrations"
-        }
-      ],
-      "ratelimits": [
-        { "name": "REGISTER_LIMIT", "namespace_id": "placeholder-3001", "simple": { "limit": 10, "period": 60 } },
-        { "name": "LOGIN_IP_LIMIT", "namespace_id": "placeholder-3002", "simple": { "limit": 20, "period": 60 } },
-        { "name": "LOGIN_USER_LIMIT", "namespace_id": "placeholder-3003", "simple": { "limit": 10, "period": 60 } },
-        { "name": "MERIT_LIMIT", "namespace_id": "placeholder-3004", "simple": { "limit": 30, "period": 60 } }
-      ]
-    }
-  }
+	"name": "wordward-game",
+	"main": "worker/index.js",
+	"compatibility_date": "2024-09-23",
+	"assets": {
+		"directory": "./dist",
+		"binding": "ASSETS",
+		"run_worker_first": [
+			"/api/*"
+		]
+	},
+	"vars": {
+		"APP_ORIGIN": "https://sheepgame.top",
+		"PASSWORD_KDF_VERSION": "PBKDF2-SHA-256-v1",
+		"PASSWORD_KDF_ITERATIONS": "120000"
+	},
+	"ratelimits": [
+		{
+			"name": "REGISTER_LIMIT",
+			"namespace_id": "placeholder-1001",
+			"simple": {
+				"limit": 10,
+				"period": 60
+			}
+		},
+		{
+			"name": "LOGIN_IP_LIMIT",
+			"namespace_id": "placeholder-1002",
+			"simple": {
+				"limit": 20,
+				"period": 60
+			}
+		},
+		{
+			"name": "LOGIN_USER_LIMIT",
+			"namespace_id": "placeholder-1003",
+			"simple": {
+				"limit": 10,
+				"period": 60
+			}
+		},
+		{
+			"name": "MERIT_LIMIT",
+			"namespace_id": "placeholder-1004",
+			"simple": {
+				"limit": 30,
+				"period": 60
+			}
+		}
+	],
+	"env": {
+		"preview": {
+			"name": "wordward-game-preview",
+			"vars": {
+				"APP_ORIGIN": "https://preview.sheepgame.top",
+				"PASSWORD_KDF_VERSION": "PBKDF2-SHA-256-v1",
+				"PASSWORD_KDF_ITERATIONS": "120000",
+				"TURNSTILE_SITE_KEY": ""
+			},
+			"d1_databases": [
+				{
+					"binding": "DB",
+					"database_name": "wordward-preview",
+					"database_id": "3d7c6a36-1fb2-47a6-bdfe-a4906af4e7d6",
+					"migrations_dir": "migrations"
+				}
+			],
+			"ratelimits": [
+				{
+					"name": "REGISTER_LIMIT",
+					"namespace_id": "placeholder-2001",
+					"simple": {
+						"limit": 10,
+						"period": 60
+					}
+				},
+				{
+					"name": "LOGIN_IP_LIMIT",
+					"namespace_id": "placeholder-2002",
+					"simple": {
+						"limit": 20,
+						"period": 60
+					}
+				},
+				{
+					"name": "LOGIN_USER_LIMIT",
+					"namespace_id": "placeholder-2003",
+					"simple": {
+						"limit": 10,
+						"period": 60
+					}
+				},
+				{
+					"name": "MERIT_LIMIT",
+					"namespace_id": "placeholder-2004",
+					"simple": {
+						"limit": 30,
+						"period": 60
+					}
+				}
+			]
+		},
+		"production": {
+			"name": "wordward-game",
+			"vars": {
+				"APP_ORIGIN": "https://sheepgame.top",
+				"PASSWORD_KDF_VERSION": "PBKDF2-SHA-256-v1",
+				"PASSWORD_KDF_ITERATIONS": "120000",
+				"TURNSTILE_SITE_KEY": ""
+			},
+			"d1_databases": [
+				{
+					"binding": "DB",
+					"database_name": "wordward-production",
+					"database_id": "afb377f7-c8c5-492c-8ece-bdd1ca2fd877",
+					"migrations_dir": "migrations"
+				}
+			],
+			"ratelimits": [
+				{
+					"name": "REGISTER_LIMIT",
+					"namespace_id": "placeholder-3001",
+					"simple": {
+						"limit": 10,
+						"period": 60
+					}
+				},
+				{
+					"name": "LOGIN_IP_LIMIT",
+					"namespace_id": "placeholder-3002",
+					"simple": {
+						"limit": 20,
+						"period": 60
+					}
+				},
+				{
+					"name": "LOGIN_USER_LIMIT",
+					"namespace_id": "placeholder-3003",
+					"simple": {
+						"limit": 10,
+						"period": 60
+					}
+				},
+				{
+					"name": "MERIT_LIMIT",
+					"namespace_id": "placeholder-3004",
+					"simple": {
+						"limit": 30,
+						"period": 60
+					}
+				}
+			]
+		}
+	}
 }
