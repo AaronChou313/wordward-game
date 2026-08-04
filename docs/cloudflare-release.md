@@ -62,13 +62,26 @@ npx wrangler d1 create wordward-preview
 npx wrangler d1 create wordward-production
 ```
 
-把返回的 `database_id` 分别填入 `wrangler.jsonc` 的 `env.preview` 和 `env.production`，替换 `replace-with-*-database-id`。不要修改数据库名称。
+把返回的 `database_id` 分别填入 `wrangler.jsonc` 的 `env.preview` 和 `env.production`。不要修改数据库名称。填写后运行：
+
+```bash
+npx wrangler deploy --dry-run --env preview
+npx wrangler deploy --dry-run --env production
+```
+
+两次输出都应显示正确的 D1 数据库名称，且不应再出现配置警告。
 
 ## 六、配置 Rate Limiting
 
-本项目需要注册、登录 IP、登录用户名、功勋四个限流绑定。预览和正式环境各需要四个 namespace，共八个。
+本项目需要注册、登录 IP、登录用户名、功勋四个限流绑定。这里不需要在控制台创建 namespace，也没有单独的“创建 namespace”按钮。
 
-在 Cloudflare Dashboard 的 Workers 设置中创建 namespace（如果控制台没有入口，可使用 Cloudflare API 创建），将返回的 ID 填入 `wrangler.jsonc` 对应的 `namespace_id`，替换全部 `placeholder-*`。
+`namespace_id` 只是你在当前 Cloudflare 账号内自定义的正整数标识，必须保持唯一。项目配置已经使用以下编号：
+
+- 顶层默认配置：`1001`–`1004`
+- 预览环境：`2001`–`2004`
+- 正式环境：`3001`–`3004`
+
+如果这些编号没有被你账号中的其他 Worker 使用，保持不变即可。若部署时 Wrangler 报 namespace 已被占用，就把冲突编号改成其他未使用的正整数，然后重新执行 dry-run。不要把编号写成 `placeholder-2001` 这样的非数字字符串。
 
 默认限制：
 
