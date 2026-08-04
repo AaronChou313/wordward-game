@@ -7,6 +7,8 @@ function requireDb(db) {
 
 function classifyError(error) {
   if (error instanceof D1ConflictError || error instanceof D1UnavailableError) return error;
+  // Validation failures are programmer errors, not transient D1 outages.
+  if (error instanceof TypeError) return error;
   // D1 wraps SQLite failures in one or more Error.cause objects. Inspect the
   // complete chain (including error codes) so constraint failures remain 409s
   // instead of being mistaken for transient database outages.

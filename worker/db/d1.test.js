@@ -82,6 +82,11 @@ describe('query helpers and row conversions', () => {
     }
   });
 
+  it('preserves programmer TypeErrors instead of reporting database unavailability', () => {
+    const error = new TypeError('invalid statement');
+    expect(classifyError(error)).toBe(error);
+  });
+
   it('binds values without interpolating SQL text', async () => {
     const now = Date.now();
     const username = "x'); DROP TABLE users; --";

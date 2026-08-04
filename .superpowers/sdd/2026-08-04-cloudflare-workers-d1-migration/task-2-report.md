@@ -27,6 +27,20 @@ Total Upload: 63.86 KiB / gzip: 15.53 KiB
 --dry-run: exiting now.
 ```
 
+## Review Fix: Preserve programmer TypeErrors
+
+- `classifyError` now returns `TypeError` instances unchanged. Invalid batch descriptors and similar internal validation failures therefore reach the normal 500 handling path instead of being mislabeled as D1 outages (503).
+- Added a focused regression test covering this distinction while leaving known D1 operational errors mapped to `D1UnavailableError`.
+
+### Fix Verification
+
+`npm run d1:test -- --run`
+
+```text
+Test Files  1 passed (1)
+Tests       7 passed (7)
+```
+
 The dry run listed the preview D1 (`wordward-preview`), all four rate-limit bindings, and Assets. No `migrations_dir` warning remains.
 
 `npx wrangler d1 migrations list wordward-preview --env preview --local` lists `0001_initial.sql` as pending, confirming the local migration command resolves the configured binding.
