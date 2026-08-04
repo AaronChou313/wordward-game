@@ -13,6 +13,9 @@ import { signAccessToken, verifyAccessToken } from '../../security/jwt.js';
 import { first } from '../../db/queries.js';
 import { toPublicUser, toUser } from '../../db/rows.js';
 import { requireSameOrigin } from '../../middleware/origin.js';
+import { D1UnavailableError } from '../../db/errors.js';
+import { SecretConfigurationError } from '../../security/hmac.js';
+import { requireAuthSecrets } from './service.js';
 
 const COOKIE_NAME = 'wordward_refresh';
 
@@ -22,8 +25,8 @@ function errorResponse(c, error, clear = false) {
     clearRefreshCookie(headers);
     c.header('Set-Cookie', headers.get('Set-Cookie'));
   }
-  if (error instanceof AuthError) return c.json({ error: error.message }, error.status);
-  return c.json({ error: 'Authentication unavailable' }, 503);
+  if (error instanceof AuthError) return c.json({ error: error.message, code: error.code || 'AUTH_ERROR' }, error.status);
+  return c.json({ error: 'Authentication unavailable', code: error instanceof D1UnavailableError ? 'D1_UNAVAILABLE' : error instanceof SecretConfigurationError ? 'CONFIGURATION_ERROR' : 'AUTH_UNAVAILABLE' }, 503);
 }
 
 async function body(c) {
@@ -34,6 +37,7 @@ function sessionResponse(c, env, user, refresh, status = 200) {
   const headers = new Headers();
   setRefreshCookie(headers, refresh.token);
   c.header('Set-Cookie', headers.get('Set-Cookie'));
+  requireAuthSecrets(env);
   return signAccessToken(user, env.JWT_ACCESS_SECRET, Date.now(), ACCESS_TOKEN_TTL)
     .then((accessToken) => c.json({ accessToken, user: toPublicUser(user) }, status));
 }
@@ -64,6 +68,7 @@ export function authRoutes(app) {
     const rejected = requireSameOrigin(c.req.raw, c.env);
     if (rejected) return rejected;
     try {
+      requireAuthSecrets(c.env);
       const cookie = c.req.header('Cookie') || '';
       const token = cookie.match(/(?:^|;\s*)wordward_refresh=([^;]*)/)?.[1] || '';
       const result = await rotateRefreshToken(c.env.DB, token, c.env.REFRESH_TOKEN_PEPPER);
@@ -76,11 +81,16 @@ export function authRoutes(app) {
     if (rejected) return rejected;
     const cookie = c.req.header('Cookie') || '';
     const token = cookie.match(/(?:^|;\s*)wordward_refresh=([^;]*)/)?.[1] || '';
-    await revokeRefreshToken(c.env.DB, token, c.env.REFRESH_TOKEN_PEPPER);
     const headers = new Headers();
     clearRefreshCookie(headers);
     c.header('Set-Cookie', headers.get('Set-Cookie'));
-    return c.body(null, 204);
+    try {
+      await revokeRefreshToken(c.env.DB, token, c.env.REFRESH_TOKEN_PEPPER);
+      return c.body(null, 204);
+    } catch (error) {
+      // Always clear the browser cookie, while exposing only stable auth errors.
+      return errorResponse(c, error, false);
+    }
   });
 }
 
@@ -89,13 +99,16 @@ export async function requireAuth(c, next) {
   const header = c.req.header('Authorization') || '';
   if (!header.startsWith('Bearer ')) return c.json({ error: 'Unauthorized' }, 401);
   try {
+    requireAuthSecrets(c.env);
     const payload = await verifyAccessToken(header.slice(7), c.env.JWT_ACCESS_SECRET);
     const row = await first(c.env.DB, 'SELECT * FROM users WHERE id = ?', payload.id);
     const user = toUser(row);
     if (!user || user.status !== 'ACTIVE' || user.username !== payload.username) return c.json({ error: 'Unauthorized' }, 401);
     c.set('user', toPublicUser(user));
     await next();
-  } catch {
+  } catch (error) {
+    if (error instanceof D1UnavailableError) return c.json({ error: 'Authentication unavailable', code: 'D1_UNAVAILABLE' }, 503);
+    if (error instanceof SecretConfigurationError) return c.json({ error: 'Authentication unavailable', code: 'CONFIGURATION_ERROR' }, 503);
     return c.json({ error: 'Unauthorized' }, 401);
   }
 }

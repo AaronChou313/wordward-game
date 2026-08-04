@@ -1,7 +1,7 @@
 import { first, batch, run } from '../../db/queries.js';
 import { D1ConflictError } from '../../db/errors.js';
 import { toPublicUser, toUser } from '../../db/rows.js';
-import { hashRefreshToken } from '../../security/hmac.js';
+import { hashRefreshToken, requireSecret } from '../../security/hmac.js';
 import {
   DEFAULT_PASSWORD_ITERATIONS,
   PASSWORD_KDF_VERSION,
@@ -15,6 +15,11 @@ import { bytesToBase64Url } from '../../security/encoding.js';
 
 export const ACCESS_TOKEN_TTL = 900;
 export const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+export function requireAuthSecrets(env) {
+  requireSecret(env?.JWT_ACCESS_SECRET);
+  requireSecret(env?.REFRESH_TOKEN_PEPPER);
+}
 
 export class AuthError extends Error {
   constructor(message, status = 400, code = undefined) {
@@ -45,7 +50,10 @@ function requestIp(request) {
 
 async function verifyChallenge(env, input, request) {
   const result = await verifyTurnstile(input.turnstileToken, request, env?.TURNSTILE_SECRET_KEY);
-  if (!result.ok) throw new AuthError('Verification failed', 403, 'TURNSTILE_FAILED');
+  if (!result.ok) {
+    if (result.reason === 'unavailable') throw new AuthError('Authentication unavailable', 503, 'AUTH_UNAVAILABLE');
+    throw new AuthError('Verification failed', 403, 'TURNSTILE_FAILED');
+  }
 }
 
 function publicUser(row) {
@@ -58,7 +66,8 @@ function randomToken() {
 }
 
 export async function createRefreshToken(db, userId, pepper, now = Date.now()) {
-  if (!db || !userId || !pepper) throw new TypeError('db, userId and pepper are required');
+  if (!db || !userId) throw new TypeError('db and userId are required');
+  requireSecret(pepper);
   const createdAt = nowMs(now);
   const token = randomToken();
   const id = crypto.randomUUID();
@@ -67,6 +76,7 @@ export async function createRefreshToken(db, userId, pepper, now = Date.now()) {
 }
 
 export async function registerUser(env, input, request) {
+  requireAuthSecrets(env);
   const { username, password, turnstileToken } = input || {};
   let credentials;
   try { credentials = validateCredentials(username, password); } catch (error) {
@@ -95,6 +105,7 @@ export async function registerUser(env, input, request) {
 }
 
 export async function authenticateUser(env, input, request) {
+  requireAuthSecrets(env);
   const { username, password, turnstileToken } = input || {};
   let credentials;
   try { credentials = validateCredentials(username, password); } catch (error) {
@@ -114,7 +125,8 @@ export async function authenticateUser(env, input, request) {
 }
 
 export async function rotateRefreshToken(db, token, pepper, now = Date.now()) {
-  if (!token || !pepper) throw new AuthError('Invalid refresh token', 401, 'INVALID_REFRESH_TOKEN');
+  requireSecret(pepper);
+  if (!token) throw new AuthError('Invalid refresh token', 401, 'INVALID_REFRESH_TOKEN');
   const timestamp = nowMs(now);
   const tokenHash = await hashRefreshToken(token, pepper);
   const current = await first(db, 'SELECT r.*, u.username, u.status, u.merit_total, u.merit_reached_at, u.password_hash, u.password_salt, u.password_kdf, u.password_iterations, u.created_at AS user_created_at, u.updated_at AS user_updated_at FROM refresh_tokens r JOIN users u ON u.id = r.user_id WHERE r.token_hash = ?', tokenHash);
@@ -131,7 +143,8 @@ export async function rotateRefreshToken(db, token, pepper, now = Date.now()) {
 }
 
 export async function revokeRefreshToken(db, token, pepper, now = Date.now()) {
-  if (!token || !pepper) return false;
+  requireSecret(pepper);
+  if (!token) return false;
   const result = await run(db, 'UPDATE refresh_tokens SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL', nowMs(now), await hashRefreshToken(token, pepper));
   return Number(result?.meta?.changes || 0) > 0;
 }

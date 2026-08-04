@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { decodeBase64Url, encodeBase64Url } from './encoding.js';
-import { hashCursor, hashRefreshToken } from './hmac.js';
+import { hashCursor, hashRefreshToken, requireSecret, SecretConfigurationError } from './hmac.js';
 import { signAccessToken, verifyAccessToken } from './jwt.js';
 import { clearRefreshCookie, setRefreshCookie } from './cookies.js';
 import { hashPassword, normalizeUsername, validateCredentials, verifyPassword } from './password.js';
@@ -60,6 +60,13 @@ describe('Worker security primitives', () => {
   it('creates signed refresh and cursor hashes', async () => {
     expect(await hashRefreshToken('token', 'pepper')).toMatch(/^[0-9a-f]{64}$/);
     expect(await hashCursor({ id: 'u1', score: 2 }, 'cursor-secret')).toMatch(/^[A-Za-z0-9_-]+$/);
+  });
+
+  it('fails closed when HMAC secrets are missing or blank', async () => {
+    expect(() => requireSecret(undefined)).toThrow(SecretConfigurationError);
+    expect(() => requireSecret('   ')).toThrow(SecretConfigurationError);
+    await expect(signAccessToken({ id: 'u1', username: 'alice' }, undefined)).rejects.toMatchObject({ status: 503, code: 'CONFIGURATION_ERROR' });
+    await expect(hashRefreshToken('token', '')).rejects.toMatchObject({ status: 503, code: 'CONFIGURATION_ERROR' });
   });
 
   it('sets and clears the refresh cookie attributes', () => {
