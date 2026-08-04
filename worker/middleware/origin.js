@@ -3,8 +3,16 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 export function requireSameOrigin(request, env = {}) {
   const url = new URL(request.url);
   if (!url.pathname.startsWith('/api/') || SAFE_METHODS.has(request.method.toUpperCase())) return null;
-  if (!env.APP_ORIGIN) return null;
-  const expected = new URL(env.APP_ORIGIN).origin;
+  let expected;
+  try {
+    if (typeof env.APP_ORIGIN !== 'string' || !env.APP_ORIGIN.trim()) throw new Error('missing origin');
+    const configured = new URL(env.APP_ORIGIN);
+    if (!['http:', 'https:'].includes(configured.protocol) || configured.origin === 'null') throw new Error('malformed origin');
+    if (configured.username || configured.password || (configured.pathname !== '/' && configured.pathname !== '') || configured.search || configured.hash) throw new Error('malformed origin');
+    expected = configured.origin;
+  } catch {
+    return forbiddenResponse();
+  }
   const origin = request.headers.get('Origin');
   const referer = request.headers.get('Referer');
   let supplied = origin;
@@ -15,6 +23,10 @@ export function requireSameOrigin(request, env = {}) {
       supplied = null;
     }
   }
-  if (!supplied || supplied !== expected) return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+  if (!supplied || supplied !== expected) return forbiddenResponse();
   return null;
+}
+
+function forbiddenResponse() {
+  return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
 }

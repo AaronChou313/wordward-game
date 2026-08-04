@@ -26,6 +26,21 @@ describe('Worker security primitives', () => {
     expect(await verifyPassword('correct horse', { ...first, hash: first.hash.slice(0, -2) })).toBe(false);
   });
 
+  it('rejects malformed password records and invalid KDF options', async () => {
+    const record = await hashPassword('correct horse', { iterations: 1000 });
+    expect(await verifyPassword('correct horse', { ...record, salt: '' })).toBe(false);
+    expect(await verifyPassword('correct horse', { ...record, salt: record.salt.slice(0, -1) })).toBe(false);
+    expect(await verifyPassword('correct horse', { ...record, hash: '' })).toBe(false);
+    expect(await verifyPassword('correct horse', { ...record, hash: `${record.hash}a` })).toBe(false);
+    expect(await verifyPassword('correct horse', { ...record, iterations: 0 })).toBe(false);
+    expect(await verifyPassword('correct horse', { ...record, iterations: Number.NaN })).toBe(false);
+    expect(await verifyPassword('correct horse', { ...record, iterations: Number.POSITIVE_INFINITY })).toBe(false);
+    expect(await verifyPassword('correct horse', { ...record, version: 'unknown' })).toBe(false);
+    await expect(hashPassword('correct horse', { iterations: 0 })).rejects.toThrow(/iterations/);
+    await expect(hashPassword('correct horse', { iterations: Number.NaN })).rejects.toThrow(/iterations/);
+    await expect(hashPassword('correct horse', { iterations: Number.POSITIVE_INFINITY })).rejects.toThrow(/iterations/);
+  });
+
   it('round-trips base64url without Node Buffer', () => {
     const encoded = encodeBase64Url('✓ worker');
     expect(decodeBase64Url(encoded, true)).toBe('✓ worker');
@@ -63,6 +78,14 @@ describe('Worker security primitives', () => {
     expect(rejected.status).toBe(403);
   });
 
+  it('fails closed for unsafe API requests when the app origin is unavailable or malformed', () => {
+    const request = new Request('https://wordward.example/api/save', { method: 'POST' });
+    expect(requireSameOrigin(request, {})).toMatchObject({ status: 403 });
+    expect(requireSameOrigin(request, { APP_ORIGIN: 'not a URL' })).toMatchObject({ status: 403 });
+    expect(requireSameOrigin(request, { APP_ORIGIN: 'javascript:alert(1)' })).toMatchObject({ status: 403 });
+    expect(requireSameOrigin(new Request(request, { method: 'GET' }), {})).toBeNull();
+  });
+
   it('verifies Turnstile and maps upstream errors', async () => {
     const request = new Request('https://wordward.example/api/auth/login', { headers: { 'CF-Connecting-IP': '203.0.113.4' } });
     const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: true }), { status: 200 }));
@@ -76,5 +99,8 @@ describe('Worker security primitives', () => {
     expect(await consumeLimit(undefined, 'x')).toEqual({ allowed: true });
     expect(await consumeLimit({ limit: vi.fn().mockResolvedValue({ success: true }) }, 'x')).toEqual({ allowed: true });
     expect(await consumeLimit({ limit: vi.fn().mockResolvedValue({ success: false }) }, 'x')).toEqual({ allowed: false });
+    expect(await consumeLimit({ limit: vi.fn().mockResolvedValue({}) }, 'x')).toEqual({ allowed: false });
+    expect(await consumeLimit({ limit: vi.fn().mockRejectedValue(new Error('offline')) }, 'x')).toEqual({ allowed: false });
+    expect(await consumeLimit({ limit: 'not a function' }, 'x')).toEqual({ allowed: false });
   });
 });

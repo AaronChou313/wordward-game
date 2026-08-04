@@ -1,5 +1,14 @@
 import { base64UrlToBytes, bytesToBase64Url, toBytes } from './encoding.js';
 
+// Keep the PBKDF2 work bounded so malformed records cannot turn verification
+// into an unbounded CPU operation. These bounds are shared by hashing and
+// verification and can be tightened during deployment benchmarking.
+export const MIN_PASSWORD_ITERATIONS = 1;
+export const MAX_PASSWORD_ITERATIONS = 1_000_000;
+export const DEFAULT_PASSWORD_ITERATIONS = 120000;
+export const PASSWORD_KDF_VERSION = 'PBKDF2-SHA-256-v1';
+const SUPPORTED_KDF_VERSIONS = new Set([PASSWORD_KDF_VERSION, 'v1']);
+
 export class AuthValidationError extends Error {
   constructor(message, status = 400) {
     super(message);
@@ -24,9 +33,11 @@ export function validateCredentials(username, password) {
 }
 
 export async function hashPassword(password, options = {}) {
-  const iterations = Number(options.iterations || 120000);
-  const version = options.version || 'PBKDF2-SHA-256-v1';
-  if (!Number.isInteger(iterations) || iterations < 1) throw new TypeError('iterations must be a positive integer');
+  const rawIterations = options?.iterations;
+  const iterations = rawIterations === undefined ? DEFAULT_PASSWORD_ITERATIONS : parseIterations(rawIterations);
+  const version = options?.version === undefined ? PASSWORD_KDF_VERSION : options.version;
+  if (!isValidIterations(iterations)) throw new TypeError('iterations must be a bounded positive integer');
+  if (!isValidKdfVersion(version)) throw new TypeError('unsupported password KDF version');
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const key = await crypto.subtle.importKey('raw', toBytes(password), 'PBKDF2', false, ['deriveBits']);
   const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations }, key, 256);
@@ -35,17 +46,32 @@ export async function hashPassword(password, options = {}) {
 
 export async function verifyPassword(password, record) {
   try {
-    const iterations = Number(record?.iterations);
-    if (!Number.isInteger(iterations) || iterations < 1 || typeof record?.salt !== 'string' || typeof record?.hash !== 'string') return false;
+    const iterations = parseIterations(record?.iterations);
+    if (!isValidIterations(iterations) || typeof record?.salt !== 'string' || typeof record?.hash !== 'string') return false;
+    if (record.version !== undefined && !isValidKdfVersion(record.version)) return false;
     const salt = base64UrlToBytes(record.salt);
     const expected = base64UrlToBytes(record.hash);
+    if (salt.length !== 16 || expected.length !== 32) return false;
     const key = await crypto.subtle.importKey('raw', toBytes(password), 'PBKDF2', false, ['deriveBits']);
-    const actual = new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations }, key, expected.length * 8));
+    const actual = new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations }, key, 256));
     let difference = actual.length ^ expected.length;
-    const length = Math.max(actual.length, expected.length);
-    for (let index = 0; index < length; index += 1) difference |= (actual[index % (actual.length || 1)] || 0) ^ (expected[index % (expected.length || 1)] || 0);
+    for (let index = 0; index < expected.length; index += 1) difference |= actual[index] ^ expected[index];
     return difference === 0;
   } catch {
     return false;
   }
+}
+
+function isValidIterations(value) {
+  return Number.isFinite(value) && Number.isInteger(value) && value >= MIN_PASSWORD_ITERATIONS && value <= MAX_PASSWORD_ITERATIONS;
+}
+
+function parseIterations(value) {
+  if (typeof value !== 'number' && typeof value !== 'string') return Number.NaN;
+  if (typeof value === 'string' && value.trim() === '') return Number.NaN;
+  return Number(value);
+}
+
+function isValidKdfVersion(value) {
+  return typeof value === 'string' && SUPPORTED_KDF_VERSIONS.has(value);
 }
