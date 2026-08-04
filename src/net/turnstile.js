@@ -1,5 +1,6 @@
 // Browser-only Turnstile adapter. The secret key is never read by this module.
 const WIDGET_ID = '__wordward_turnstile_widget__';
+let siteKeyPromise = null;
 
 export class TurnstileUnavailableError extends Error {
   constructor(message = '安全验证暂不可用，请稍后重试') {
@@ -8,14 +9,26 @@ export class TurnstileUnavailableError extends Error {
   }
 }
 
-function siteKey() {
+function embeddedSiteKey() {
   if (typeof document === 'undefined') return '';
   return document.querySelector('meta[name="turnstile-site-key"]')?.content?.trim() || '';
 }
 
+async function siteKey() {
+  const embedded = embeddedSiteKey();
+  if (embedded) return embedded;
+  if (!siteKeyPromise) {
+    siteKeyPromise = fetch('/api/config', { credentials: 'same-origin' })
+      .then((response) => response.ok ? response.json() : null)
+      .then((config) => String(config?.turnstileSiteKey || '').trim())
+      .catch(() => '');
+  }
+  return siteKeyPromise;
+}
+
 /** Resolve a fresh short-lived token. No configured site key is allowed in local/offline builds. */
 export async function getTurnstileToken(action = 'login') {
-  const key = siteKey();
+  const key = await siteKey();
   if (!key) return '';
   const turnstile = globalThis.turnstile;
   if (!turnstile || typeof turnstile.render !== 'function' || typeof turnstile.execute !== 'function') {

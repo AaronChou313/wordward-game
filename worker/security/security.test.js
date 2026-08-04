@@ -77,12 +77,17 @@ describe('Worker security primitives', () => {
     expect(headers.get('Set-Cookie')).toBe('wordward_refresh=; Max-Age=0; Path=/api/auth; HttpOnly; Secure; SameSite=Lax');
   });
 
-  it('accepts same-origin state changes and rejects cross-origin API requests', () => {
+  it('accepts same-origin state changes and rejects cross-origin API requests', async () => {
     const env = { APP_ORIGIN: 'https://wordward.example' };
     expect(requireSameOrigin(new Request('https://wordward.example/api/save', { method: 'POST', headers: { Origin: env.APP_ORIGIN } }), env)).toBeNull();
+    expect(requireSameOrigin(new Request('https://wordward.example/api/save', { method: 'POST', headers: { Referer: `${env.APP_ORIGIN}/game` } }), env)).toBeNull();
+    expect(requireSameOrigin(new Request('https://wordward.example/api/save', { method: 'POST', headers: { 'Sec-Fetch-Site': 'same-origin' } }), env)).toBeNull();
     const rejected = requireSameOrigin(new Request('https://wordward.example/api/save', { method: 'POST', headers: { Origin: 'https://evil.example' } }), env);
     expect(rejected).toBeInstanceOf(Response);
     expect(rejected.status).toBe(403);
+    expect(await rejected.json()).toEqual({ error: 'Forbidden', code: 'ORIGIN_MISMATCH' });
+    expect(requireSameOrigin(new Request('https://evil.example/api/save', { method: 'POST', headers: { 'Sec-Fetch-Site': 'same-origin' } }), env)).toMatchObject({ status: 403 });
+    expect(requireSameOrigin(new Request('https://wordward.example/api/save', { method: 'POST', headers: { 'Sec-Fetch-Site': 'cross-site' } }), env)).toMatchObject({ status: 403 });
   });
 
   it('fails closed for unsafe API requests when the app origin is unavailable or malformed', () => {

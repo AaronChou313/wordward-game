@@ -29,6 +29,7 @@ export function createApp({ env, ctx }) {
   leaderboardRoutes(app);
 
   app.get('/api/health', (c) => c.json({ status: 'ok' }));
+  app.get('/api/config', (c) => c.json({ turnstileSiteKey: String(c.env?.TURNSTILE_SITE_KEY || '') }));
 
   app.onError(errorHandler);
 

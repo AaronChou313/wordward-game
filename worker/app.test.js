@@ -11,4 +11,12 @@ describe('worker shell', () => {
     expect(missing.status).toBe(404);
     expect((await missing.json()).error).toBe('API route not found');
   });
+
+  it('exposes only the public Turnstile site key', async () => {
+    const app = createApp({ env: { TURNSTILE_SITE_KEY: 'site-key', TURNSTILE_SECRET_KEY: 'secret-key' }, ctx: {} });
+    const response = await app.request('https://wordward.example/api/config');
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ turnstileSiteKey: 'site-key' });
+  });
 });

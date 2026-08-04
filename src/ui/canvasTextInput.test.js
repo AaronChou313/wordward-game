@@ -3,6 +3,7 @@ import {
   blurCanvasTextInput,
   focusCanvasTextInput,
   isCanvasTextInputActive,
+  resetCanvasTextInput,
   subscribeCanvasTextInputState,
 } from './canvasTextInput.js';
 
@@ -15,16 +16,26 @@ function fakeInput() {
     blur: vi.fn(),
     removeAttribute: vi.fn(),
     setSelectionRange: vi.fn(),
+    oninput: null,
+    onkeydown: null,
+    onblur: null,
   };
 }
 
 describe('canvas text input viewport behavior', () => {
-  let input;
+  const input = fakeInput();
   let appendChild;
   let scrollTo;
 
   beforeEach(() => {
-    input = fakeInput();
+    input.value = '';
+    input.focus.mockClear();
+    input.blur.mockClear();
+    input.removeAttribute.mockClear();
+    input.setSelectionRange.mockClear();
+    input.oninput = null;
+    input.onkeydown = null;
+    input.onblur = null;
     appendChild = vi.fn();
     scrollTo = vi.fn();
     vi.stubGlobal('document', {
@@ -35,7 +46,7 @@ describe('canvas text input viewport behavior', () => {
   });
 
   afterEach(() => {
-    blurCanvasTextInput();
+    resetCanvasTextInput();
     vi.unstubAllGlobals();
   });
 
@@ -64,5 +75,15 @@ describe('canvas text input viewport behavior', () => {
 
     unsubscribe();
   });
-});
 
+  it('clears the hidden value and callbacks when reset', () => {
+    focusCanvasTextInput('old-password', { password: true, maxLength: 128, onInput() {} });
+
+    resetCanvasTextInput();
+
+    expect(input.value).toBe('');
+    expect(input.oninput).toBeNull();
+    expect(input.onkeydown).toBeNull();
+    expect(input.onblur).toBeNull();
+  });
+});
