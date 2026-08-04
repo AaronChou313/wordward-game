@@ -16,7 +16,9 @@ export function requireSameOrigin(request, env = {}) {
   if (url.origin !== expected) return forbiddenResponse();
   const origin = request.headers.get('Origin');
   const referer = request.headers.get('Referer');
-  let supplied = origin;
+  const applicationRequest = request.headers.get('X-Wordward-Request') === '1';
+  const fetchSite = request.headers.get('Sec-Fetch-Site');
+  let supplied = origin && origin !== 'null' ? origin : null;
   if (!supplied && referer) {
     try {
       supplied = new URL(referer).origin;
@@ -25,7 +27,8 @@ export function requireSameOrigin(request, env = {}) {
     }
   }
   if (supplied && supplied !== expected) return forbiddenResponse();
-  if (!supplied && request.headers.get('Sec-Fetch-Site') !== 'same-origin') return forbiddenResponse();
+  if (!supplied && fetchSite === 'cross-site') return forbiddenResponse();
+  if (!supplied && fetchSite !== 'same-origin' && !applicationRequest) return forbiddenResponse();
   return null;
 }
 

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AccountScene, accountErrorMessage, validateAccountCredentials } from './accountScene.js';
+import { isCanvasTextInputActive } from '../ui/canvasTextInput.js';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -36,11 +37,31 @@ describe('account credential validation', () => {
     expect(scene.password).toBe('');
     expect(scene.active).toBeNull();
     expect(input.value).toBe('');
-    expect(input.blur).toHaveBeenCalledOnce();
+    expect(isCanvasTextInputActive()).toBe(false);
   });
 
   it('maps origin and Turnstile failures to actionable Chinese messages', () => {
     expect(accountErrorMessage({ status: 403, data: { code: 'ORIGIN_MISMATCH' } })).toBe('当前访问地址不受支持，请使用本站正式域名访问');
     expect(accountErrorMessage({ status: 403, data: { code: 'TURNSTILE_FAILED' } })).toBe('安全验证失败，请刷新页面后重试');
+  });
+
+  it('blurs the native password input before submitting without clearing credentials', () => {
+    const input = {
+      style: {}, value: '', focus: vi.fn(), blur: vi.fn(), removeAttribute: vi.fn(), setSelectionRange: vi.fn(),
+    };
+    vi.stubGlobal('document', { createElement: vi.fn(() => input), body: { appendChild: vi.fn() } });
+    vi.stubGlobal('window', { scrollX: 0, scrollY: 0, scrollTo: vi.fn() });
+    const scene = new AccountScene({ switch: vi.fn() });
+    scene.username = 'alice';
+    scene.password = 'secret';
+    scene.focus('password');
+
+    const submission = scene.submitForm();
+
+    expect(isCanvasTextInputActive()).toBe(false);
+    expect(scene.active).toBeNull();
+    expect(scene.username).toBe('alice');
+    expect(scene.password).toBe('secret');
+    return submission;
   });
 });
