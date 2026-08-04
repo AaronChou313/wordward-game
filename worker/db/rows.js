@@ -25,6 +25,11 @@ export function toUser(row) {
   };
 }
 
+export function toPublicUser(user) {
+  if (!user) return null;
+  return { id: user.id, username: user.username };
+}
+
 export function toProfile(row) {
   if (!row) return null;
   return {

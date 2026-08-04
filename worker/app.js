@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { authRoutes } from './modules/auth/routes.js';
 
 /**
  * Create the Worker HTTP application.
@@ -6,6 +7,15 @@ import { Hono } from 'hono';
  */
 export function createApp({ env, ctx }) {
   const app = new Hono();
+
+  // Hono's env is populated from the request context; bind the supplied env
+  // for app.request() tests while preserving Worker runtime behavior.
+  app.use('*', async (c, next) => {
+    if (!c.env || Object.keys(c.env).length === 0) c.env = env || {};
+    await next();
+  });
+
+  authRoutes(app);
 
   app.get('/api/health', (c) => c.json({ status: 'ok' }));
 
