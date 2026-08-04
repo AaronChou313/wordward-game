@@ -13,11 +13,11 @@ npx wrangler deploy --env preview
 BASE_URL=https://preview.sheepgame.top npm run release:check
 ```
 
-In Workers Builds, connect `git@github.com:AaronChou313/wordward-game.git`, set the production branch to `main`, root directory to the repository root, build command to `npm run verify:worker`, deploy command to `npx wrangler deploy`, and preview deploy command to `npx wrangler versions upload --env preview`. Keep the Wrangler version pinned by `package-lock.json` and do not enable cache until an uncached build passes.
+In Workers Builds, connect `git@github.com:AaronChou313/wordward-game.git`, set the production branch to `main`, root directory to the repository root, build command to `npm run verify:worker`, deploy command to `npm run deploy:production`, and preview deploy command to `npm run deploy:preview`. Keep the Wrangler version pinned by `package-lock.json` and do not enable cache until an uncached build passes.
 
 Set only public values in Wrangler (`APP_ORIGIN`, `PASSWORD_KDF_VERSION`, `PASSWORD_KDF_ITERATIONS`, and the Turnstile site key). Set these as Cloudflare secrets, never GitHub variables or Vite variables: `JWT_ACCESS_SECRET`, `REFRESH_TOKEN_PEPPER`, `CURSOR_SIGNING_SECRET`, `TURNSTILE_SECRET_KEY`, and the optional smoke-test secret. Verify logs and `dist/` contain none of them.
 
-Before production migration, record a D1 Time Travel bookmark, run `npm run d1:migrate:production`, deploy the Worker, and run `BASE_URL=https://sheepgame.top npm run release:check`. Inspect CPU, Error 1102/1027, D1 errors, and secret-leak alerts before announcing the release.
+Before production migration, record a D1 Time Travel bookmark, run `npm run d1:migrate:production`, deploy with `npm run deploy:production`, and run `BASE_URL=https://sheepgame.top npm run release:check`. Inspect CPU, Error 1102/1027, D1 errors, and secret-leak alerts before announcing the release.
 
 ## Domain cutover and rollback
 

@@ -16,6 +16,8 @@
     "worker:test": "vitest run worker",
     "worker:dev": "npm run build && wrangler dev --env preview --local",
     "worker:smoke": "node scripts/worker-smoke.mjs",
+    "deploy:preview": "wrangler deploy --env preview",
+    "deploy:production": "wrangler deploy --env production",
     "verify:worker": "npm test && npm run worker:test && npm run build && wrangler deploy --dry-run --env preview",
     "release:check": "node scripts/release-check.mjs"
   },
