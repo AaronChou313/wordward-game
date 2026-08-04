@@ -3,6 +3,18 @@ import { blurCanvasTextInput, focusCanvasTextInput } from '../ui/canvasTextInput
 import { getCurrentUser, login, register, restoreSession } from '../net/apiClient.js';
 import { authenticatedSceneName } from '../startup.js';
 
+export function validateAccountCredentials(usernameValue, passwordValue) {
+  const username = String(usernameValue || '').normalize('NFKC').trim();
+  const password = String(passwordValue ?? '');
+  if (Array.from(username).length < 3 || Array.from(username).length > 24) {
+    return { username, password, error: '用户名需为 3–24 个字符' };
+  }
+  if (Array.from(password).length < 1 || Array.from(password).length > 128) {
+    return { username, password, error: '密码需为 1–128 个字符' };
+  }
+  return { username, password, error: '' };
+}
+
 export class AccountScene {
   constructor(scenes) {
     this.scenes = scenes;
@@ -72,20 +84,13 @@ export class AccountScene {
 
   async submitForm() {
     if (this.busy) return;
-    const username = this.username.normalize('NFKC').trim();
-    if (Array.from(username).length < 3 || Array.from(username).length > 24) {
-      this.message = '用户名需为 3–24 个字符';
-      return;
-    }
-    if (Array.from(this.password).length < 10 || Array.from(this.password).length > 128) {
-      this.message = '密码需为 10–128 个字符';
-      return;
-    }
+    const credentials = validateAccountCredentials(this.username, this.password);
+    if (credentials.error) return void (this.message = credentials.error);
     this.busy = true;
     this.message = '连接中…';
     try {
-      if (this.mode === 'login') await login(username, this.password);
-      else await register(username, this.password);
+      if (this.mode === 'login') await login(credentials.username, credentials.password);
+      else await register(credentials.username, credentials.password);
       blurCanvasTextInput();
       this.scenes.switch(authenticatedSceneName());
     } catch (error) {

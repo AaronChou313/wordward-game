@@ -11,9 +11,9 @@ import { consumeLimit } from '../middleware/limits.js';
 describe('Worker security primitives', () => {
   it('normalizes usernames and enforces credential lengths', () => {
     expect(normalizeUsername('  Ａlice  ')).toBe('alice');
-    expect(validateCredentials(' Alice ', '1234567890')).toEqual({ username: 'alice', password: '1234567890' });
+    expect(validateCredentials(' Alice ', 'x')).toEqual({ username: 'alice', password: 'x' });
     expect(() => validateCredentials('ab', '1234567890')).toThrow(/Username/);
-    expect(() => validateCredentials('alice', 'short')).toThrow(/Password/);
+    expect(() => validateCredentials('alice', '')).toThrow(/Password/);
     expect(() => validateCredentials('alice', 'x'.repeat(129))).toThrow(/Password/);
   });
 
