@@ -28,7 +28,7 @@ export function validateCredentials(username, password) {
   const usernameLength = Array.from(normalized).length;
   const passwordLength = Array.from(passwordText).length;
   if (usernameLength < 3 || usernameLength > 24) throw new AuthValidationError('Username must be 3 to 24 characters');
-  if (passwordLength < 10 || passwordLength > 128) throw new AuthValidationError('Password must be 10 to 128 characters');
+  if (passwordLength < 1 || passwordLength > 128) throw new AuthValidationError('Password must be 1 to 128 characters');
   return { username: normalized, password: passwordText };
 }
 
