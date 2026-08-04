@@ -17,6 +17,8 @@ export function createApp({ env, ctx }) {
   // for app.request() tests while preserving Worker runtime behavior.
   app.use('*', async (c, next) => {
     if (!c.env || Object.keys(c.env).length === 0) c.env = env || {};
+    const length = Number(c.req.header('Content-Length') || 0);
+    if (length > 1024 * 1024) return c.json({ error: 'Request body is too large', code: 'BODY_TOO_LARGE' }, 413);
     await next();
   });
 
