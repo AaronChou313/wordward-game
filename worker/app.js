@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { authRoutes } from './modules/auth/routes.js';
 import { profileRoutes } from './modules/profile/routes.js';
 import { saveRoutes } from './modules/save/routes.js';
+import { meritRoutes } from './modules/merit/routes.js';
 
 /**
  * Create the Worker HTTP application.
@@ -20,6 +21,7 @@ export function createApp({ env, ctx }) {
   authRoutes(app);
   profileRoutes(app);
   saveRoutes(app);
+  meritRoutes(app);
 
   app.get('/api/health', (c) => c.json({ status: 'ok' }));
 
