@@ -35,7 +35,8 @@
         {
           "binding": "DB",
           "database_name": "wordward-preview",
-          "database_id": "replace-with-preview-database-id"
+          "database_id": "replace-with-preview-database-id",
+          "migrations_dir": "migrations"
         }
       ],
       "ratelimits": [
@@ -50,7 +51,8 @@
         {
           "binding": "DB",
           "database_name": "wordward-production",
-          "database_id": "replace-with-production-database-id"
+          "database_id": "replace-with-production-database-id",
+          "migrations_dir": "migrations"
         }
       ],
       "ratelimits": [

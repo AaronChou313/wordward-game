@@ -8,7 +8,11 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run src",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "d1:migrate:local": "wrangler d1 migrations apply wordward-preview --env preview --local",
+    "d1:migrate:preview": "wrangler d1 migrations apply wordward-preview --env preview --remote",
+    "d1:migrate:production": "wrangler d1 migrations apply wordward-production --env production --remote",
+    "d1:test": "vitest run worker/db"
   },
   "devDependencies": {
     "vite": "8.2.0",
