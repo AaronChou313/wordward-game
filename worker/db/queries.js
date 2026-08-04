@@ -6,7 +6,6 @@ function requireDb(db) {
 }
 
 function classifyError(error) {
-  if (process.env.DEBUG_D1) console.error('D1 raw error', error);
   if (error instanceof D1ConflictError || error instanceof D1UnavailableError) return error;
   // D1 wraps SQLite failures in one or more Error.cause objects. Inspect the
   // complete chain (including error codes) so constraint failures remain 409s

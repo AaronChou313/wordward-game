@@ -1,7 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { getPlatformProxy } from 'wrangler';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { all, batch, first, run } from './queries.js';
+import { all, batch, classifyError, first, run } from './queries.js';
+import { D1ConflictError, D1UnavailableError } from './errors.js';
 import { toClaim, toCheckpoint, toProfile, toSave, toUser } from './rows.js';
 
 const migrationPath = new URL('../../migrations/0001_initial.sql', import.meta.url);
@@ -66,6 +67,21 @@ describe('D1 initial migration', () => {
 });
 
 describe('query helpers and row conversions', () => {
+  it('classifies wrapped D1 errors without requiring Node process globals', () => {
+    const originalProcess = globalThis.process;
+    try {
+      Reflect.deleteProperty(globalThis, 'process');
+      const constraint = classifyError(Object.assign(new Error('request failed'), {
+        cause: Object.assign(new Error('UNIQUE constraint failed: users.username'), { code: 'SQLITE_CONSTRAINT_UNIQUE' }),
+      }));
+      expect(constraint).toBeInstanceOf(D1ConflictError);
+      expect(constraint.constraint).toBe('users.username');
+      expect(classifyError(new Error('connection unavailable'))).toBeInstanceOf(D1UnavailableError);
+    } finally {
+      globalThis.process = originalProcess;
+    }
+  });
+
   it('binds values without interpolating SQL text', async () => {
     const now = Date.now();
     const username = "x'); DROP TABLE users; --";

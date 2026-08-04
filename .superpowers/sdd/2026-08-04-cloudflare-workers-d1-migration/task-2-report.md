@@ -36,3 +36,23 @@ The dry run listed the preview D1 (`wordward-preview`), all four rate-limit bind
 - Preview and production D1 `database_id` values remain placeholders and must be replaced with Cloudflare-provisioned IDs before remote migration/deployment.
 - Rate-limit namespace IDs are placeholders pending Cloudflare provisioning.
 - The test uses Wrangler's ephemeral local D1 proxy; run the migration scripts separately against the intended database before deployment.
+
+## Review Fix: Worker-safe D1 error classification
+
+- Removed the `process.env.DEBUG_D1` access from `worker/db/queries.js`; production Workers do not provide the Node `process` global without `nodejs_compat`, and D1 failures must still be classified safely.
+- Added a focused regression test that temporarily removes `globalThis.process` and verifies wrapped SQLite uniqueness errors classify as `D1ConflictError` while generic failures classify as `D1UnavailableError`.
+
+### Fix Verification
+
+`npm run d1:test -- --run`
+
+```text
+Test Files  1 passed (1)
+Tests       6 passed (6)
+```
+
+`npx wrangler deploy --dry-run --env preview`
+
+```text
+--dry-run: exiting now.
+```
