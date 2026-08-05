@@ -71,7 +71,7 @@ export class Tower {
       range: b.range * (1 + (this.buffs.range || 0) + (w.range || 0)),
       aoe: (b.aoe || 0) * (1 + (this.buffs.aoe || 0)),
       atkType: b.atkType,
-      crit: (this.buffs.crit || 0) + (w.crit || 0),
+      crit: (this.buffs.crit || 0) + (w.crit || 0) + (itemBuffs.crit || 0),
       critMul: this.buffs.critMul || 2,
       slowAura: this.buffs.slowAura || 0,
       firstHit: this.buffs.firstHit || 0,

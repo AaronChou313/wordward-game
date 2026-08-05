@@ -15,7 +15,7 @@ import { LORD_HP, WAVE_REST, FIRST_WAVE_DELAY, waveConfig } from '../config/wave
 import { resolveDiff } from '../config/difficulty.js';
 import { claimBossCompletion, isBossWave } from './progression.js';
 import { assignBlockers } from './blocking.js';
-import { pointToCell, cellCenter, CELL } from '../config/map.js';
+import { pointToCell, cellCenter, CELL, COLS, ROWS } from '../config/map.js';
 import { BASE_UNITS, ADV_CHARS } from '../config/units.js';
 import { HEROES, PREFIX_BUFFS, HERO_NAMES } from '../config/words.js';
 import { ITEMS, MAX_ACTIVE } from '../config/items.js';
@@ -87,6 +87,31 @@ export const ACTIVE_ITEM_HANDLERS = {
       applySlowEffect(enemy, 'warDrum', duration, factor);
     }
     return { used: true, message: `${item.name}：敌军行动迟滞`, sound: 'boom' };
+  },
+  'damage-strongest': (scene, active, item) => {
+    const alive = scene.enemies.filter((enemy) => !enemy.dead);
+    if (alive.length === 0) return { used: false, message: '当前没有敌军' };
+    const target = alive.reduce((max, e) => (e.hp > max.hp ? e : max));
+    const damage = item.effect.damageAt(active.level);
+    scene.effects.tracer(target.x, target.y - 80, target.x, target.y, '#ffd75a');
+    if (target.takeDamage(damage)) scene.handleKill(target, null);
+    scene.effects.damageText(target.x, target.y - 48, '-' + damage, '#ffd75a', 30);
+    scene.effects.shake(6, 0.18);
+    return { used: true, message: `${item.name}：雷击最强者`, sound: 'boom' };
+  },
+  'heal-lord': (scene, active, item) => {
+    const heal = item.effect.healAt(active.level);
+    scene.lordHp = Math.min(scene.lordHpMax(), scene.lordHp + heal);
+    scene.effects.damageText(375, 120, '+' + heal, '#7fe08a', 30);
+    scene.effects.ring(375, 120, '#7fe08a', 20, 260);
+    return { used: true, message: `${item.name}：主公回复 ${heal} 生命`, sound: 'click' };
+  },
+  'summon-random': (scene, _active, item) => {
+    const chars = Object.keys(BASE_UNITS);
+    const char = chars[Math.floor(Math.random() * chars.length)];
+    const placed = scene.tryPlaceChar(char);
+    if (!placed) return { used: false, message: '没有可放置的位置' };
+    return { used: true, message: `${item.name}：召唤「${char}」`, sound: 'merge' };
   },
 };
 
@@ -543,6 +568,21 @@ export class BattleScene {
     return tower;
   }
 
+  // 召唤符：在任意空格部署一名基础将士（走与拖拽放置相同的 deploy 路径）
+  tryPlaceChar(char) {
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (!this.grid.canPlace({ char, kind: 'base' }, c, r)) continue;
+        const unit = { char, kind: 'base', tier: 1, level: 1, xp: 0 };
+        this.deploy(unit, c, r);
+        Audio.place();
+        this.afterBoardChange();
+        return true;
+      }
+    }
+    return false;
+  }
+
   // 图鉴解锁：发金币奖励，集齐一类发额外奖励
   unlockCodex(catId, key) {
     const save = getSave();
@@ -619,6 +659,10 @@ export class BattleScene {
     if (result.sound && Audio[result.sound]) Audio[result.sound]();
     if (result.message) Toast.show(result.message);
     return result;
+  }
+
+  lordHpMax() {
+    return LORD_HP + Math.round(this.lordHpBonus || 0);
   }
 
   handleKill(enemy, tower) {

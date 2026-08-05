@@ -112,7 +112,7 @@ export class Enemy {
       this.blockAttackTimer -= dt;
       while (this.blockAttackTimer <= 1e-9 && this.blocker && !this.blocker.dead) {
         const blocker = this.blocker;
-        const damage = blockDamage(this);
+        const damage = blockDamage(this, blocker.blockBuffs);
         this.blockAttackTimer += BLOCKING.attackInterval;
         this.blockAttackFlash = 0.16;
         const died = blocker.takeBlockDamage(damage);
