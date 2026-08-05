@@ -61,6 +61,20 @@ export const EQUIP = {
 
 export const rarityById = (id) => RARITIES.find((r) => r.id === id) || RARITIES[0];
 
+// 拥有装备排序：稀有度降序 → 等级降序 → uid 升序（纯函数，不修改入参）
+const RARITY_RANK = { epic: 3, rare: 2, fine: 1, common: 0 };
+
+export function sortEquipOwned(list) {
+  return (list || []).slice().sort((a, b) => {
+    const r = (RARITY_RANK[b.rarity] ?? 0) - (RARITY_RANK[a.rarity] ?? 0);
+    if (r !== 0) return r;
+    const l = (b.lvl ?? 0) - (a.lvl ?? 0);
+    if (l !== 0) return l;
+    const au = Number(a.uid) || 0, bu = Number(b.uid) || 0;
+    return au - bu;
+  });
+}
+
 // 附加词条池与稀有度档位（洗练/掉落重随）
 export const AFFIX_POOL = ['atk', 'spd', 'crit', 'range', 'coin', 'lordHp'];
 export const AFFIX_BOUNDS = {

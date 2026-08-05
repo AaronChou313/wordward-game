@@ -117,7 +117,7 @@ export class GachaScene {
     ctx.textAlign = 'right';
     ctx.fillStyle = '#e8c35a';
     ctx.font = '30px KaiTi, STKaiti, serif';
-    ctx.fillText(`金币 ${save.gold}`, 700, 70);
+    ctx.fillText(`金币 ${save.gold} · 宝石 ${save.gems || 0} · 魂玉 ${save.soulJade || 0}`, 700, 70);
 
     ctx.beginPath();
     ctx.rect(50, 200, 650, 900);

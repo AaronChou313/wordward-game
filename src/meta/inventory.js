@@ -147,7 +147,7 @@ export class InventoryScene {
     ctx.textAlign = 'right';
     ctx.fillStyle = '#e8c35a';
     ctx.font = '30px KaiTi, STKaiti, serif';
-    ctx.fillText('金币 ' + s.gold, 700, 70);
+    ctx.fillText(`金币 ${s.gold} · 宝石 ${s.gems || 0} · 魂玉 ${s.soulJade || 0}`, 700, 70);
     ctx.textAlign = 'left';
     ctx.fillStyle = '#c98ab8';
     ctx.font = '20px KaiTi, STKaiti, serif';
