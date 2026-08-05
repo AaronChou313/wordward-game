@@ -108,6 +108,29 @@ describe('BattleScene defeat ordering', () => {
     expect(save.shop.stock).toEqual(settledStock);
   });
 
+  it('refreshes shop stock when a Boss wave is cleared (victory round end)', () => {
+    const save = getSave();
+    save.items.owned = {};
+    save.shop = { initialized: true, stock: [] };
+    save.merit = { total: 0, claimed: {} };
+    save.diff.unlocked = ['easy'];
+    save.diff.endlessFloor = 1;
+    save.diff.best = {};
+
+    const scene = new BattleScene({});
+    scene.diff = { id: 'easy', floor: 1 };
+    scene.runId = 'run-refresh';
+    scene.runSeed = 'seed-refresh';
+    scene.runStartedAt = new Date('2026-08-03T00:00:00.000Z');
+    scene.score = { kills: 60 };
+    scene.lordHp = 20;
+
+    scene.handleBossDefeated(30);
+
+    expect(save.shop.stock).toHaveLength(4);
+    expect(new Set(save.shop.stock).size).toBe(4);
+  });
+
   it('records the actual special enemy spawned by the update loop exactly once', () => {
     const save = getSave();
     save.codex.elite = [];

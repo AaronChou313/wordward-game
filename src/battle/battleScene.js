@@ -13,7 +13,7 @@ import { Score } from './score.js';
 import { pointAt } from './path.js';
 import { LORD_HP, WAVE_REST, FIRST_WAVE_DELAY, waveConfig } from '../config/waves.js';
 import { resolveDiff } from '../config/difficulty.js';
-import { claimBossCompletion } from './progression.js';
+import { claimBossCompletion, isBossWave } from './progression.js';
 import { assignBlockers } from './blocking.js';
 import { pointToCell, cellCenter, CELL } from '../config/map.js';
 import { BASE_UNITS, ADV_CHARS } from '../config/units.js';
@@ -655,7 +655,14 @@ export class BattleScene {
         lordHp: this.lordHp,
       }));
     }
-    if (!result.claimed) return result;
+    // 战斗胜利结算：每击败一轮 Boss（30 的倍数）即刷新商城军需，
+    // 与 gameOver 的失败/退出刷新相互独立（一场战斗可结算多次）。
+    const isVictory = isBossWave(wave);
+    if (isVictory) refreshShopAfterBattle(getSave());
+    if (!result.claimed) {
+      if (isVictory) persist();
+      return result;
+    }
 
     persist();
     const meritText = '击败 Boss！获得 ' + result.merit + ' 军功';

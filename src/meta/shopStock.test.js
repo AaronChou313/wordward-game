@@ -78,6 +78,18 @@ describe('shop stock', () => {
     delete save.items.owned.fire;
     expect(ensureShopStock(save, () => 0.5)).toEqual(['recruit']);
   });
+
+  it('keeps the freshly refreshed stock when the shop is next opened', () => {
+    const save = freshSave();
+    save.items.owned = { fire: 1 };
+    save.shop = { initialized: true, stock: ['recruit', 'train'] };
+    const refreshed = refreshShopAfterBattle(save, () => 0);
+    expect(refreshed).toHaveLength(4);
+    expect(save.shop.stock).not.toContain('fire');
+    const reopened = ensureShopStock(save, () => 0.9);
+    expect(reopened).toEqual(save.shop.stock); // must not clear the fresh stock
+    expect(reopened).toHaveLength(4);
+  });
 });
 
 function freshSave() {
