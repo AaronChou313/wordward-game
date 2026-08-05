@@ -1,9 +1,9 @@
-// 商城：展示战后刷新的最多四件未拥有道具；升级统一在背包完成
+// 商城：展示战后刷新的最多四件道具；已拥有道具购买即升级
 import { Button, roundRect } from '../ui/button.js';
 import { drawPanel } from '../ui/panel.js';
 import { Toast } from '../ui/toast.js';
 import { Audio } from '../core/audio.js';
-import { ITEMS } from '../config/items.js';
+import { ITEMS, upgradeCost } from '../config/items.js';
 import { getSave, persist } from './saveData.js';
 import { buyShopStockItem, ensureShopStock } from './shopStock.js';
 
@@ -28,13 +28,13 @@ export class ShopScene {
     const result = buyShopStockItem(getSave(), id);
     if (!result.purchased) {
       if (result.reason === 'gold') Toast.show('金币不足');
-      else if (result.reason === 'owned') Toast.show('该道具已拥有，请在背包升级');
       else Toast.show('该商品已不在本轮库存');
       return result;
     }
     persist();
     Audio.coin();
-    Toast.show(`购得 ${ITEMS[id].name}，去背包装备`);
+    const newLevel = (getSave().items.owned[id] || 0);
+    Toast.show(result.upgraded ? `${ITEMS[id].name} 升至 Lv${newLevel}` : `购得 ${ITEMS[id].name}，去背包装备`);
     return result;
   }
 
@@ -75,7 +75,7 @@ export class ShopScene {
       ctx.textAlign = 'center';
       ctx.fillStyle = '#6a5a42';
       ctx.font = '30px KaiTi, STKaiti, serif';
-      ctx.fillText('本轮没有可购买的未拥有道具', 375, 560);
+      ctx.fillText('本轮没有可购买的道具', 375, 560);
       ctx.font = '23px KaiTi, STKaiti, serif';
       ctx.fillText('完成或退出一场战斗后会刷新下一批军需', 375, 610);
       ctx.restore();
@@ -87,7 +87,7 @@ export class ShopScene {
     ctx.textAlign = 'center';
     ctx.fillStyle = '#7b6a50';
     ctx.font = '21px KaiTi, STKaiti, serif';
-    ctx.fillText('已拥有道具的升级、装备与出售均在背包完成', 375, 1225);
+    ctx.fillText('已拥有道具购买即升级；装备与出售均在背包完成', 375, 1225);
     ctx.restore();
     Toast.render(ctx);
   }
@@ -96,6 +96,8 @@ export class ShopScene {
     const item = ITEMS[id];
     const y = CARD_Y + index * (CARD_H + CARD_GAP);
     const active = item.kind === 'active';
+    const ownedLevel = getSave().items.owned[id] || 0;
+    const cost = ownedLevel >= 1 ? upgradeCost(id, ownedLevel) : item.price;
     ctx.save();
     ctx.fillStyle = active ? 'rgba(58, 30, 48, 0.72)' : 'rgba(27, 53, 48, 0.72)';
     ctx.strokeStyle = active ? '#c98ab8' : '#79b8a8';
@@ -117,16 +119,22 @@ export class ShopScene {
     ctx.font = '21px KaiTi, STKaiti, serif';
     drawWrapped(ctx, item.descAt(1), 82, y + 104, 375, 28);
 
+    if (ownedLevel >= 1) {
+      ctx.fillStyle = '#7b6a50';
+      ctx.font = '19px KaiTi, STKaiti, serif';
+      ctx.fillText(`已拥有 Lv${ownedLevel}`, 82, y + 150);
+    }
+
     ctx.fillStyle = '#5a3a28';
     ctx.strokeStyle = '#c9a86a';
     ctx.beginPath();
     roundRect(ctx, 485, y + 148, 180, 46, 8);
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = gold >= item.price ? '#ffd75a' : '#777';
+    ctx.fillStyle = gold >= cost ? '#ffd75a' : '#777';
     ctx.font = '23px KaiTi, STKaiti, serif';
     ctx.textAlign = 'center';
-    ctx.fillText(`购买 ${item.price} 金`, 575, y + 171);
+    ctx.fillText(ownedLevel >= 1 ? `升级 ${cost} 金` : `购买 ${cost} 金`, 575, y + 171);
     ctx.restore();
   }
 }
