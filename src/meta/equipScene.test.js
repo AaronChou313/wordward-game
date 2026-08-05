@@ -24,7 +24,8 @@ function fakeSave(ownedCount = 3) {
 vi.mock('./saveData.js', () => ({
   getSave: () => currentSave,
   persist: () => {},
-  equipByUid: () => null,
+  equipByUid: (uid) => currentSave.equipment.owned.find((e) => e.uid === uid) || null,
+  spendGems: (n) => { if ((currentSave.gems || 0) < n) return false; currentSave.gems -= n; return true; },
 }));
 
 import { EquipScene } from './equipScene.js';
@@ -56,5 +57,14 @@ describe('EquipScene list scrolling', () => {
     scene.onPointerMove(105, 400); // drag up
     scene.onPointerUp(105, 400);
     expect(scene.scroll).toBeLessThanOrEqual(scene.maxScroll());
+  });
+
+  it('enhances an equipment instance with gems', () => {
+    const scene = new EquipScene({ switch: () => {} });
+    const save = fakeSave(1);
+    const inst = save.equipment.owned[0];
+    scene.enhance(inst.uid);
+    expect(inst.lvl).toBe(2);
+    expect(save.gems).toBe(0); // 10 - 10 (lvl1 提升成本 = 10 + 5*0)
   });
 });

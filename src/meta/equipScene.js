@@ -4,10 +4,11 @@ import { drawPanel } from '../ui/panel.js';
 import { Toast } from '../ui/toast.js';
 import { Audio } from '../core/audio.js';
 import { EQUIP, RARITIES, PLAYER_SLOTS, UNIT_SLOTS, equipStats, equipStatText, rarityById } from '../config/equipment.js';
-import { getSave, persist, equipByUid } from './saveData.js';
+import { getSave, persist, equipByUid, spendGems } from './saveData.js';
 
 const SLOT_Y = 290, SLOT_H = 120;
 const LIST_Y = 470, ROW_H = 96;
+const ENHANCE_X = 560, ENHANCE_W = 120, ENHANCE_H = 56;
 const TAP_DIST = 10;
 
 export class EquipScene {
@@ -30,6 +31,17 @@ export class EquipScene {
 
   ownedOf(kind) {
     return getSave().equipment.owned.filter((e) => EQUIP[e.id].kind === kind);
+  }
+
+  enhance(uid) {
+    const inst = equipByUid(uid);
+    if (!inst) return Toast.show('装备不存在');
+    const cost = 10 + 5 * (inst.lvl - 1);
+    if (!spendGems(cost)) return Toast.show('宝石不足');
+    inst.lvl += 1;
+    persist();
+    Audio.coin();
+    Toast.show(inst.id + ' 升至 Lv' + inst.lvl);
   }
 
   slotRects() {
@@ -84,6 +96,10 @@ export class EquipScene {
     this.scroll = Math.max(0, Math.min(this.maxScroll(), next));
   }
 
+  enhanceRect(rowY) {
+    return { x: ENHANCE_X, y: rowY + 20, w: ENHANCE_W, h: ENHANCE_H };
+  }
+
   onPointerUp(x, y) {
     const press = this.press;
     this.press = null;
@@ -93,7 +109,13 @@ export class EquipScene {
     const list = this.ownedOf(this.tab);
     for (let i = 0; i < list.length; i++) {
       const ry = LIST_Y + i * ROW_H - this.scroll;
-      if (x >= 60 && x <= 681 && y >= ry && y <= ry + ROW_H - 10) {
+      // 行内提升按钮（右侧 560~680）：先命中则提升，不触发整行装备
+      const er = this.enhanceRect(ry);
+      if (x >= er.x && x <= er.x + er.w && y >= er.y && y <= er.y + er.h) {
+        this.enhance(list[i].uid);
+        return;
+      }
+      if (x >= 60 && x < ENHANCE_X && y >= ry && y <= ry + ROW_H - 10) {
         const inst = list[i];
         const save = getSave();
         if (this.tab === 'player') {
@@ -208,6 +230,18 @@ export class EquipScene {
       const def = EQUIP[inst.id];
       const kindText = def.kind === 'player' ? '玩家装备 · ' + def.slot : '将士武器';
       ctx.fillText(kindText + (equipped ? ' · 已装备' : ''), 80, ry + 62);
+
+      // 提升按钮（右侧）：10 + 5*(lvl-1) 宝石
+      const er = this.enhanceRect(ry);
+      ctx.fillStyle = '#5a3a28';
+      ctx.fillRect(er.x, er.y, er.w, er.h);
+      ctx.strokeStyle = '#c9a86a';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(er.x, er.y, er.w, er.h);
+      ctx.fillStyle = '#f0d8a8';
+      ctx.font = '22px KaiTi, STKaiti, serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('升 ' + (10 + 5 * (inst.lvl - 1)) + '宝', er.x + er.w / 2, er.y + er.h / 2);
       ctx.restore();
     });
 
