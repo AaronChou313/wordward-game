@@ -23,7 +23,9 @@ describe('migrateSave', () => {
 
     expect(migrateSave(version1Save)).toEqual({
       ...version1Save,
-      version: 2,
+      version: 3,
+      gems: 10,
+      soulJade: 3,
       codex: { ...version1Save.codex, elite: [], boss: [] },
       merit: { total: 0, claimed: {} },
       gacha: { smallPity: 0, bigPity: 0, history: [] },
@@ -31,9 +33,16 @@ describe('migrateSave', () => {
     });
   });
 
+  it('adds gems and soul jade to legacy saves', () => {
+    const migrated = migrateSave({ version: 2, gold: 100, equipment: { owned: [], nextUid: 1, player: {}, units: {} } });
+    expect(migrated.gems).toBe(10);
+    expect(migrated.soulJade).toBe(3);
+    expect(migrated.version).toBe(3);
+  });
+
   it('preserves dual-pity counters and recent results across reload migration', () => {
     const migrated = migrateSave({
-      version: 2,
+      version: 3,
       gacha: {
         smallPity: 7,
         bigPity: 42,
@@ -50,12 +59,12 @@ describe('migrateSave', () => {
 
   it('preserves initialized shop stock including an intentionally empty shop', () => {
     expect(migrateSave({
-      version: 2,
+      version: 3,
       shop: { initialized: true, stock: [] },
     }).shop).toEqual({ initialized: true, stock: [] });
 
     expect(migrateSave({
-      version: 2,
+      version: 3,
       shop: { initialized: true, stock: ['fire', 'recruit'] },
     }).shop).toEqual({ initialized: true, stock: ['fire', 'recruit'] });
   });
@@ -83,7 +92,7 @@ describe('migrateSave', () => {
 
   it('idempotently normalizes every positive-wave legacy endless claim', () => {
     const raw = {
-      version: 2,
+      version: 3,
       merit: {
         total: 49,
         claimed: {

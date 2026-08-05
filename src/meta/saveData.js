@@ -2,8 +2,10 @@
 import { loadData, saveData } from '../core/storage.js';
 
 const DEFAULT_SAVE = {
-  version: 2,
+  version: 3,
   gold: 300,
+  gems: 10,
+  soulJade: 3,
   items: { owned: {}, equippedActive: [], equippedPassive: [] }, // owned: { itemId: level }
   unlockedChars: ['精', '铁', '赵', '云', '吕', '布'],
   bestWave: 0,
@@ -63,7 +65,7 @@ export function migrateSave(raw) {
     }
     delete migrated.merit.claimed[key];
   }
-  migrated.version = 2;
+  migrated.version = 3;
   return migrated;
 }
 

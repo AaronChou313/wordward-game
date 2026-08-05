@@ -120,7 +120,7 @@ describe('resilient cloud save sync', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(4);
     const queuedBody = JSON.parse(fetchMock.mock.calls[3][1].body);
-    expect(queuedBody).toMatchObject({ version: 1, data: { version: 2, gold: 425 } });
+    expect(queuedBody).toMatchObject({ version: 1, data: { version: 3, gold: 425 } });
     expect(getSyncState()).toMatchObject({ status: 'synced', cloudVersion: 2 });
   });
 
