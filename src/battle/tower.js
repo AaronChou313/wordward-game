@@ -172,7 +172,9 @@ export class Tower {
     if (stun.stunned) return 0;
     if (this.blocking) return 0;
     if (this.inert) return 0;
-    const wb = ctx2.unitGear ? ctx2.unitGear[this.char] : null;
+    // 将士武器：基础/进阶字用单字符键，英雄用全名（heroName），组员用组名
+    const gearKey = this.group ? this.group.name : (this.kind === 'hero' ? this.heroName : this.char);
+    const wb = ctx2.unitGear ? ctx2.unitGear[gearKey] : null;
     const s = this.stats(itemBuffs, wb);
     if (!s) return 0;
     this.cool -= dt;

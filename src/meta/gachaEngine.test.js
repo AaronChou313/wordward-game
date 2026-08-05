@@ -45,6 +45,18 @@ describe('gacha configuration', () => {
       .every((reward) => reward.weight > 0 && reward.label)).toBe(true);
   });
 
+  it('includes gems in rare and precious pools and soul jade in the precious pool', async () => {
+    const { GACHA_REWARDS } = await import('../config/gacha.js');
+    const kinds = GACHA_REWARDS.common.concat(GACHA_REWARDS.rare, GACHA_REWARDS.precious)
+      .map((reward) => reward.kind);
+
+    expect(kinds).toContain('gems');
+    expect(kinds).toContain('soulJade');
+    expect(GACHA_REWARDS.rare.some((reward) => reward.kind === 'gems')).toBe(true);
+    expect(GACHA_REWARDS.precious.some((reward) => reward.kind === 'gems')).toBe(true);
+    expect(GACHA_REWARDS.precious.some((reward) => reward.kind === 'soulJade')).toBe(true);
+  });
+
   it('derives each displayed reward chance from the engine weights', async () => {
     const { GACHA_REWARDS, rewardChance } = await import('../config/gacha.js');
 
@@ -52,7 +64,7 @@ describe('gacha configuration', () => {
       rewards.map((reward) => rewardChance(rarity, reward))
     ));
 
-    const expected = [0.54, 0.18, 0.1035, 0.0805, 0.046, 0.0225, 0.0175, 0.01];
+    const expected = [0.54, 0.18, 0.0805, 0.0575, 0.046, 0.046, 0.0175, 0.0125, 0.0075, 0.0075, 0.005];
     chances.forEach((chance, index) => expect(chance).toBeCloseTo(expected[index], 10));
     expect(chances.reduce((sum, chance) => sum + chance, 0)).toBeCloseTo(1, 10);
   });
@@ -293,13 +305,61 @@ describe('drawGacha', () => {
     const rareSave = makeSave();
     const preciousSave = makeSave();
 
-    const rare = drawGacha(rareSave, sequenceRandom(0.72, 0.99));
-    const precious = drawGacha(preciousSave, sequenceRandom(0.95, 0.99));
+    const rare = drawGacha(rareSave, sequenceRandom(0.72, 0.7));
+    const precious = drawGacha(preciousSave, sequenceRandom(0.95, 0.65));
 
     expect(rare).toMatchObject({ rarity: 'rare', rewardId: 'rare-gold', amount: 200 });
     expect(precious).toMatchObject({ rarity: 'precious', rewardId: 'precious-gold', amount: 600 });
     expect(rareSave.gold).toBe(200);
     expect(preciousSave.gold).toBe(600);
+  });
+
+  it('forces gems from the rare pool and soul jade from the precious pool deterministically', async () => {
+    const { drawGacha } = await import('./gachaEngine.js');
+
+    // rare total weight = 100: gems sits in [80, 100). rarity roll 0.72 selects rare,
+    // second roll 0.85 lands on 'rare-gems', no third roll needed.
+    const gemsSave = makeSave({ gems: 0 });
+    const gems = drawGacha(gemsSave, sequenceRandom(0.72, 0.85));
+
+    expect(gems).toMatchObject({ rarity: 'rare', rewardId: 'rare-gems', kind: 'gems', amount: 25 });
+    expect(gemsSave.gems).toBe(25);
+    expect(gemsSave.gold).toBe(0);
+
+    // precious total weight = 100: soul jade sits in [90, 100). rarity roll 0.95 selects
+    // precious, second roll 0.95 lands on 'precious-soul', no third roll needed.
+    const soulSave = makeSave({ soulJade: 0 });
+    const soul = drawGacha(soulSave, sequenceRandom(0.95, 0.95));
+
+    expect(soul).toMatchObject({
+      rarity: 'precious',
+      rewardId: 'precious-soul',
+      kind: 'soulJade',
+      amount: 1,
+    });
+    expect(soulSave.soulJade).toBe(1);
+    expect(soulSave.gold).toBe(0);
+  });
+
+  it('eventually lands gems and soul jade across many pulls and credits the save', async () => {
+    const { drawGacha } = await import('./gachaEngine.js');
+    let seed = 20260805;
+    const save = makeSave({ gems: 0, soulJade: 0, unlockedChars: ['精', '铁', '赵', '云'] });
+    let gems = 0;
+    let soulJade = 0;
+
+    for (let draw = 0; draw < 200; draw++) {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      const random = () => (seed / 4294967296);
+      const result = drawGacha(save, random);
+      if (result.kind === 'gems') gems += result.amount;
+      if (result.kind === 'soulJade') soulJade += result.amount;
+    }
+
+    expect(gems).toBeGreaterThan(0);
+    expect(soulJade).toBeGreaterThan(0);
+    expect(save.gems).toBeGreaterThan(0);
+    expect(save.soulJade).toBeGreaterThan(0);
   });
 
   it('hits the 10-draw and 50-draw guarantees at their exact sequential draws', async () => {
@@ -369,10 +429,11 @@ describe('gacha panel', () => {
       '小保底：6 抽内必出稀有或以上',
       '大保底：38 抽内必出珍贵',
     ]);
-    expect(model.rewardRows).toHaveLength(8);
+    expect(model.rewardRows).toHaveLength(11);
     expect(model.rewardRows[0].text).toBe('普通 · 军饷 60 金 · 54%');
-    expect(model.rewardRows[2].text).toBe('稀有 · 进阶字（全池） · 10.35%');
-    expect(model.rewardRows[7].text).toBe('珍贵 · 军饷 600 金 · 1%');
+    expect(model.rewardRows[2].text).toBe('稀有 · 进阶字（全池） · 8.05%');
+    expect(model.rewardRows[9].text).toBe('珍贵 · 宝石 60 · 0.75%');
+    expect(model.rewardRows[10].text).toBe('珍贵 · 魂玉 1 · 0.5%');
     expect(model.history).toEqual([{ rarity: 'rare', message: '获得进阶字「关」' }]);
   });
 
@@ -387,9 +448,9 @@ describe('gacha panel', () => {
 
     expect(smallPity.nextRateLine).toBe('普通 0% · 稀有 95% · 珍贵 5%');
     expect(smallPity.rewardRows[0].text).toBe('普通 · 军饷 60 金 · 0%');
-    expect(smallPity.rewardRows[2].text).toBe('稀有 · 进阶字（全池） · 42.75%');
+    expect(smallPity.rewardRows[2].text).toBe('稀有 · 进阶字（全池） · 33.25%');
     expect(bigPity.nextRateLine).toBe('普通 0% · 稀有 0% · 珍贵 100%');
-    expect(bigPity.rewardRows[7].text).toBe('珍贵 · 军饷 600 金 · 20%');
+    expect(bigPity.rewardRows[10].text).toBe('珍贵 · 魂玉 1 · 10%');
   });
 
   it('charges before drawing and leaves pity untouched when gold is insufficient', async () => {

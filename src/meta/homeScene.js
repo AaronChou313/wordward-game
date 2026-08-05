@@ -4,6 +4,7 @@ import { Toast } from '../ui/toast.js';
 import { Audio } from '../core/audio.js';
 import { getSave, persist } from './saveData.js';
 import { availableDiffs } from '../config/difficulty.js';
+import { flushMeritClaims } from '../net/meritClient.js';
 
 export class HomeScene {
   constructor(scenes) {
@@ -13,7 +14,7 @@ export class HomeScene {
     this.buttons = [
       new Button(175, 640, 400, 90, '出 征', () => { Audio.click(); scenes.switch('battle'); }, { fontSize: 44, bg: '#7a2a20' }),
       new Button(175, 760, 400, 76, '商 城', () => { Audio.click(); scenes.switch('shop'); }, { fontSize: 34 }),
-      new Button(175, 850, 400, 76, '背 包', () => { Audio.click(); scenes.switch('inventory'); }, { fontSize: 34 }),
+      new Button(175, 850, 400, 76, '道 具', () => { Audio.click(); scenes.switch('inventory'); }, { fontSize: 34 }),
       new Button(175, 940, 400, 76, '抽 奖', () => { Audio.click(); scenes.switch('gacha'); }, { fontSize: 34 }),
       new Button(175, 1030, 195, 76, '装 备', () => { Audio.click(); scenes.switch('equip'); }, { fontSize: 34 }),
       new Button(380, 1030, 195, 76, '图 鉴', () => { Audio.click(); scenes.switch('codex'); }, { fontSize: 34 }),
@@ -22,7 +23,7 @@ export class HomeScene {
     ];
   }
 
-  enter() {}
+  enter() { flushMeritClaims(); }
 
   options() {
     return availableDiffs(getSave().diff);

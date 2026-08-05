@@ -7,7 +7,7 @@ import { flushMeritClaims } from '../net/meritClient.js';
 export class ProfileScene {
   constructor(scenes) {
     this.scenes = scenes;
-    this.profile = { nickname: '', avatarUrl: '', bio: '' };
+    this.profile = { nickname: '', bio: '' };
     this.active = null; this.busy = false; this.message = '';
     this.sync = getSyncState();
     this.back = new Button(40, 36, 130, 58, '返回', () => scenes.switch('home'), { fontSize: 26 });
@@ -43,7 +43,7 @@ export class ProfileScene {
     try {
       const profile = await getProfile();
       if (this.lifecycle !== lifecycle) return;
-      this.profile = { ...profile, avatarUrl: profile.avatarUrl || '' };
+      this.profile = { nickname: profile.nickname, bio: profile.bio };
       this.message = '';
     } catch (error) {
       if (this.lifecycle !== lifecycle) return;
@@ -54,7 +54,7 @@ export class ProfileScene {
 
   focus(field) {
     this.active = field;
-    const max = field === 'nickname' ? 24 : (field === 'bio' ? 200 : 2048);
+    const max = field === 'nickname' ? 24 : 200;
     focusCanvasTextInput(this.profile[field], {
       maxLength: max,
       onInput: (value) => { this.profile[field] = value; },
@@ -67,11 +67,10 @@ export class ProfileScene {
     const nickname = this.profile.nickname.trim();
     if (!nickname || Array.from(nickname).length > 24) return void (this.message = '昵称需为 1–24 个字符');
     if (Array.from(this.profile.bio).length > 200) return void (this.message = '简介不能超过 200 个字符');
-    if (this.profile.avatarUrl && !this.profile.avatarUrl.startsWith('https://')) return void (this.message = '头像必须使用 HTTPS 地址');
     this.busy = true; this.message = '保存中…';
     try {
-      const saved = await updateProfile({ ...this.profile, nickname, avatarUrl: this.profile.avatarUrl || null });
-      this.profile = { ...saved, avatarUrl: saved.avatarUrl || '' };
+      const saved = await updateProfile({ nickname, avatarUrl: null, bio: this.profile.bio });
+      this.profile = { nickname: saved.nickname, bio: saved.bio };
       this.message = '资料已保存';
     } catch (error) { this.message = error.message || '保存失败'; }
     finally { this.busy = false; }
@@ -85,9 +84,8 @@ export class ProfileScene {
 
   onPointerDown(x, y) {
     if (this.back.hitTest(x, y)) return this.back.onClick();
-    if (inside(x, y, 100, 330, 550, 72)) return this.focus('nickname');
-    if (inside(x, y, 100, 470, 550, 72)) return this.focus('avatarUrl');
-    if (inside(x, y, 100, 610, 550, 130)) return this.focus('bio');
+    if (inside(x, y, 100, 400, 550, 72)) return this.focus('nickname');
+    if (inside(x, y, 100, 540, 550, 130)) return this.focus('bio');
     if (this.save.hitTest(x, y)) return this.save.onClick();
     if (this.sync.status === 'conflict' && this.useLocal.hitTest(x, y)) return this.useLocal.onClick();
     if (this.sync.status === 'conflict' && this.useCloud.hitTest(x, y)) return this.useCloud.onClick();
@@ -101,9 +99,26 @@ export class ProfileScene {
     ctx.textAlign = 'center'; ctx.fillStyle = '#e8c35a'; ctx.font = 'bold 56px KaiTi, serif'; ctx.fillText('个人资料', 375, 180);
     ctx.fillStyle = '#a8d8a0'; ctx.font = '22px KaiTi, serif';
     ctx.fillText(getCurrentUser() ? '@' + getCurrentUser().username : '正在恢复会话', 375, 230);
-    drawField(ctx, 100, 330, 550, 72, '昵称', this.profile.nickname, this.active === 'nickname');
-    drawField(ctx, 100, 470, 550, 72, '头像 HTTPS 地址', this.profile.avatarUrl, this.active === 'avatarUrl');
-    drawField(ctx, 100, 610, 550, 130, '简介', this.profile.bio, this.active === 'bio');
+    // built-in avatar: gold-ring circle with 主 glyph
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(375, 300, 40, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.fillStyle = '#6f5436';
+    ctx.fillRect(335, 260, 80, 80);
+    ctx.fillStyle = '#e8c35a';
+    ctx.font = 'bold 48px KaiTi, serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('主', 375, 302);
+    ctx.strokeStyle = '#e8c35a';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(375, 300, 40, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+    drawField(ctx, 100, 400, 550, 72, '昵称', this.profile.nickname, this.active === 'nickname');
+    drawField(ctx, 100, 540, 550, 130, '简介', this.profile.bio, this.active === 'bio');
     this.save.draw(ctx);
     if (this.sync.status === 'conflict') { this.useLocal.draw(ctx); this.useCloud.draw(ctx); }
     this.logoutButton.draw(ctx);

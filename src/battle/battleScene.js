@@ -13,19 +13,20 @@ import { Score } from './score.js';
 import { pointAt } from './path.js';
 import { LORD_HP, WAVE_REST, FIRST_WAVE_DELAY, waveConfig } from '../config/waves.js';
 import { resolveDiff } from '../config/difficulty.js';
-import { claimBossCompletion } from './progression.js';
+import { claimBossCompletion, isBossWave } from './progression.js';
 import { assignBlockers } from './blocking.js';
 import { pointToCell, cellCenter, CELL } from '../config/map.js';
 import { BASE_UNITS, ADV_CHARS } from '../config/units.js';
 import { HEROES, PREFIX_BUFFS, HERO_NAMES } from '../config/words.js';
 import { ITEMS, MAX_ACTIVE } from '../config/items.js';
 import { EQUIP, equipStats, dropChance, rollRarity, rollEquipId, rarityById } from '../config/equipment.js';
+import { applyBondStats } from './bond.js';
 import { CODEX_SET_BONUS, codexCat } from '../config/codex.js';
 import { Button, roundRect } from '../ui/button.js';
 import { drawPanel } from '../ui/panel.js';
 import { Toast } from '../ui/toast.js';
 import { Audio } from '../core/audio.js';
-import { getSave, addGold, persist, grantEquip, equipByUid } from '../meta/saveData.js';
+import { getSave, addGold, addGems, addSoulJade, persist, grantEquip, equipByUid } from '../meta/saveData.js';
 import { recordCodexEncounter } from '../meta/codexDetails.js';
 import { refreshShopAfterBattle } from '../meta/shopStock.js';
 import { buildMeritClaim, queueMeritClaim } from '../net/meritClient.js';
@@ -99,6 +100,13 @@ export function dispatchActiveItem(scene, active, target = null) {
   const result = handler(scene, active, item, target);
   if (result.used) active.cd = item.cooldownAt(active.level);
   return result;
+}
+
+// 将士武器槽位键解析：英雄组/英雄傀儡用英雄全名（group.name / heroName），基础/进阶字用其单字符
+export function gearKeyFor(tower) {
+  if (tower.group) return tower.group.name;
+  if (tower.kind === 'hero' && tower.heroName) return tower.heroName;
+  return tower.char;
 }
 
 export function aggregatePassiveItemBuffs(equipped) {
@@ -175,6 +183,11 @@ export class BattleScene {
         else this.itemBuffs[k] = (this.itemBuffs[k] || 0) + s[k];
       }
     }
+
+    // 装备套装羁绊（2 件 / 3 件）并入战斗加成与主公生命
+    const bonds = applyBondStats(this.itemBuffs, save.equipment.player, save.equipment.owned);
+    this.itemBuffs = bonds;
+    this.lordHpBonus += bonds.lordHp || 0;
     this.lordHp = LORD_HP + Math.round(this.lordHpBonus);
 
     // 将士武器（按兵种）
@@ -625,6 +638,12 @@ export class BattleScene {
         : '掉落 ' + def.name + '·' + r.name + '！');
       Audio.coin();
     }
+    // 精英/Boss 概率掉宝石，Boss 概率掉魂玉
+    if (enemy.type === 'elite' && Math.random() < 0.4) addGems(Math.floor(Math.random() * 3) + 1);
+    if (enemy.type === 'boss') {
+      if (Math.random() < 0.7) addGems(Math.floor(Math.random() * 3) + 1);
+      if (Math.random() < 0.3) addSoulJade(1);
+    }
     if (!tower) return;
     // 英雄组的击杀：经验分给每个成员字
     const group = this.heroGroups.find((g) => g.puppet === tower);
@@ -655,7 +674,14 @@ export class BattleScene {
         lordHp: this.lordHp,
       }));
     }
-    if (!result.claimed) return result;
+    // 战斗胜利结算：每击败一轮 Boss（30 的倍数）即刷新商城军需，
+    // 与 gameOver 的失败/退出刷新相互独立（一场战斗可结算多次）。
+    const isVictory = isBossWave(wave);
+    if (isVictory) refreshShopAfterBattle(getSave());
+    if (!result.claimed) {
+      if (isVictory) persist();
+      return result;
+    }
 
     persist();
     const meritText = '击败 Boss！获得 ' + result.merit + ' 军功';
@@ -801,7 +827,7 @@ export class BattleScene {
       .filter((tower) => !tower.inert && !tower.group)
       .concat(this.heroGroups.map((group) => group.puppet));
     const targets = selectStunTargets(enemy, combatTowers, enemy.skill, (tower) => {
-      const gear = this.unitGear[tower.char];
+      const gear = this.unitGear[gearKeyFor(tower)];
       const stats = tower.stats(this.itemBuffs, gear);
       return stats ? stats.range : (tower.base ? tower.base.range : 0);
     });
@@ -919,7 +945,7 @@ export class BattleScene {
     if (!this.selected) return;
     const isGroup = this.selected instanceof HeroGroup;
     const puppet = isGroup ? this.selected.puppet : this.selected;
-    const s = puppet.stats(this.itemBuffs, this.unitGear[puppet.char]);
+    const s = puppet.stats(this.itemBuffs, this.unitGear[gearKeyFor(puppet)]);
 
     // 进阶字（未组词）：显示增益作用或可组词组
     if (!s) {

@@ -126,8 +126,14 @@ export class RankingScene {
 
 function drawAvatar(ctx, image, x, y) {
   ctx.save(); ctx.beginPath(); ctx.arc(x, y, 24, 0, Math.PI * 2); ctx.clip();
+  ctx.fillStyle = '#6f5436'; ctx.fillRect(x - 24, y - 24, 48, 48);
   if (image && image.ready) ctx.drawImage(image, x - 24, y - 24, 48, 48);
-  else { ctx.fillStyle = '#6f5436'; ctx.fillRect(x - 24, y - 24, 48, 48); }
+  else {
+    ctx.fillStyle = '#e8c35a'; ctx.font = 'bold 30px KaiTi, serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('主', x, y + 2);
+  }
+  ctx.strokeStyle = '#e8c35a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 24, 0, Math.PI * 2); ctx.stroke();
   ctx.restore();
 }
 

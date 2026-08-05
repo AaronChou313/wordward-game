@@ -29,7 +29,7 @@ beforeEach(() => {
   });
   clearSession();
   resetMeritClientForTests();
-  replaceSave({ version: 2, merit: { total: 1, claimed: { 'easy:30': true } } }, { sync: false });
+  replaceSave({ version: 3, merit: { total: 1, claimed: { 'easy:30': true } } }, { sync: false });
 });
 
 afterEach(() => {
@@ -56,7 +56,7 @@ describe('offline merit claim queue', () => {
   });
 
   it('does not reduce mature local merit when the verified total is lower', async () => {
-    replaceSave({ version: 2, merit: { total: 12, claimed: {} } }, { sync: false });
+    replaceSave({ version: 3, merit: { total: 12, claimed: {} } }, { sync: false });
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(sessionResponse('user-1'))
       .mockResolvedValueOnce(response({ awarded: false, merit: 1, meritTotal: 3 }));
@@ -156,6 +156,22 @@ describe('offline merit claim queue', () => {
 
     await queueMeritClaim(battleClaim());
 
+    expect(queueContents()).toEqual([]);
+  });
+
+  it('flushes queued merit claims after the user logs in', async () => {
+    storage.set('sgtd_meritQueue', JSON.stringify([
+      { userId: 'user-1', payload: battleClaim({ runId: 'run-queued-offline' }) },
+    ]));
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(sessionResponse('user-1'))
+      .mockResolvedValueOnce(response({ awarded: true, merit: 1, meritTotal: 9 }, 201));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await login('liubei', 'correct-horse-123');
+    const result = await flushMeritClaims();
+
+    expect(result).toEqual({ queued: false });
     expect(queueContents()).toEqual([]);
   });
 });
