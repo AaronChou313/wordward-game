@@ -22,6 +22,7 @@ export function bestRecordText(save) {
 export class HomeScene {
   constructor(scenes) {
     this.scenes = scenes;
+    this.btnHelp = new Button(650, 180, 60, 60, '？', () => { Audio.click(); scenes.switch('help'); }, { fontSize: 36 });
     this.btnPrev = new Button(175, 548, 60, 60, '‹', () => this.cycleDiff(-1), { fontSize: 36 });
     this.btnNext = new Button(515, 548, 60, 60, '›', () => this.cycleDiff(1), { fontSize: 36 });
     this.buttons = [
@@ -62,6 +63,7 @@ export class HomeScene {
   update(dt) { Toast.update(dt); }
 
   onPointerDown(x, y) {
+    if (this.btnHelp.hitTest(x, y)) return this.btnHelp.onClick();
     if (this.btnPrev.hitTest(x, y)) return this.btnPrev.onClick();
     if (this.btnNext.hitTest(x, y)) return this.btnNext.onClick();
     for (const b of this.buttons) if (b.hitTest(x, y)) return b.onClick();
@@ -114,6 +116,7 @@ export class HomeScene {
     ctx.font = '20px KaiTi, STKaiti, serif';
     ctx.fillText('难度（通关低难度可解锁更高）', 375, 532);
     ctx.restore();
+    this.btnHelp.draw(ctx);
     this.btnPrev.draw(ctx);
     this.btnNext.draw(ctx);
 

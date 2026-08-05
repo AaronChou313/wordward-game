@@ -15,6 +15,7 @@ import { getSave } from './meta/saveData.js';
 import { AccountScene } from './meta/accountScene.js';
 import { ProfileScene } from './meta/profileScene.js';
 import { RankingScene } from './meta/rankingScene.js';
+import { HelpScene } from './meta/helpScene.js';
 import { initialSceneName } from './startup.js';
 
 const canvas = document.getElementById('game');
@@ -30,6 +31,7 @@ scenes.register('codex', new CodexScene(scenes));
 scenes.register('account', new AccountScene(scenes));
 scenes.register('profile', new ProfileScene(scenes));
 scenes.register('ranking', new RankingScene(scenes));
+scenes.register('help', new HelpScene(scenes));
 scenes.register('battle', new BattleScene(scenes));
 
 const view = setupInput(canvas, {
