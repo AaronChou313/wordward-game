@@ -24,9 +24,20 @@ Apply the repository rules in `AGENTS.md` plus the stricter workflow below.
 - Keep access JWTs in memory and refresh tokens in HttpOnly cookies. Never weaken origin, Turnstile, rate-limit, password, or secret fail-closed behavior.
 - Add tests beside modules as `*.test.js`. Prefer real behavior over implementation-detail mocks.
 
+## Systems
+
+Current game systems, so changes stay consistent with how they already work.
+
+- **Currency**: gold (金币), gems (宝石), and soulJade (魂玉) live in the save in `src/meta/saveData.js` (defaults 300 / 10 / 3). Gold pays for shop items, item upgrades, and gacha. Gems pay for equipment enhance (强化) at `10 + 5 * (lvl - 1)` per level in `src/meta/equipScene.js`. SoulJade pays for equipment refine (洗练, 1 per use) to reroll affixes.
+- **Equipment**: players have 3 slots (武器 / 护甲 / 饰品) plus per-unit weapon slots. Equipment comes in 3 series (虎啸 / 龙腾 / 凤仪) that grant 2- and 3-piece bonds (`src/config/equipment.js`). Affix count scales by rarity — common 1, fine 1, rare 2, epic 3. Duplicate drops auto-merge into a level-up. Dynamic unit weapon slots = the 5 base units (兵骑枪弓炮) plus any hero whose full name is unlocked (`unitSlotNames`).
+- **Shop**: `src/meta/shopStock.js` rolls 4 items from the full item pool (owned and unowned both eligible) and buying an already-owned item upgrades it instead of duplicating. 19 items total.
+- **Leaderboard**: `/api/leaderboard` orders by `merit_total DESC, best_difficulty_rank ASC, best_wave DESC, merit_reached_at ASC` (`COMPOSITE_ORDER` in `worker/modules/leaderboard/routes.js`). New 0-merit users are included and pageable; `NULL` best values are folded to 0 so ordering is total. Backed by `users.best_difficulty` / `users.best_wave` (migration `0002_leaderboard_best.sql`).
+- **PBKDF2 cap**: Cloudflare Workers' WebCrypto rejects PBKDF2 above `MAX_PASSWORD_ITERATIONS = 100_000` (`worker/security/password.js`). `configuredIterations` clamps `PASSWORD_KDF_ITERATIONS` (100000 in `wrangler.jsonc`) to that cap. Never raise it above the cap.
+- **Help scene**: `src/meta/helpScene.js` renders the gameplay help panel (troops, refresh/shovel, merit progression, equipment & currency) opened from the home `？` button.
+
 ## Verification gate
 
-Run targeted tests during development.
+Run targeted tests during development. Frontend: `npm test` (vitest run src) — currently 251 tests across 33 files. Worker: `npm run worker:test` (vitest run worker) — currently 54 tests across 8 files. Keep the baselines green when touching the suites; update tests for any intentional behavior change.
 
 Before merging a feature into `preview`, run:
 
@@ -66,7 +77,7 @@ feature branch -> preview -> Preview Worker/D1 -> main -> Production Worker/D1
 
 ## Data and secrets
 
-If no D1 schema changes exist, do not run migrations.
+If no D1 schema changes exist, do not run migrations. Migration `0002_leaderboard_best.sql` (adds `users.best_difficulty` / `users.best_wave`) is already applied in local, preview, and production.
 
 For schema changes:
 
