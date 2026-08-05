@@ -26,6 +26,12 @@ export async function decodeCursor(value, secret) {
   if (!equalBytes(actual, expected)) throw new Error('Invalid cursor');
   let cursor;
   try { cursor = JSON.parse(decodeBase64Url(parts[0], true)); } catch { throw new Error('Invalid cursor'); }
-  if (!cursor || !Number.isInteger(cursor.meritTotal) || cursor.meritTotal <= 0 || !Number.isInteger(cursor.rank) || cursor.rank <= 0 || typeof cursor.id !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(cursor.id) || typeof cursor.meritReachedAt !== 'string' || !Number.isFinite(Date.parse(cursor.meritReachedAt))) throw new Error('Invalid cursor');
+  if (!cursor
+    || !Number.isInteger(cursor.meritTotal) || cursor.meritTotal < 0
+    || !Number.isInteger(cursor.bestDifficultyRank) || cursor.bestDifficultyRank < 0 || cursor.bestDifficultyRank > 4
+    || !Number.isInteger(cursor.bestWave) || cursor.bestWave < 0
+    || !Number.isInteger(cursor.meritReachedAt) || cursor.meritReachedAt < 0
+    || !Number.isInteger(cursor.rank) || cursor.rank <= 0
+    || typeof cursor.id !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(cursor.id)) throw new Error('Invalid cursor');
   return cursor;
 }
