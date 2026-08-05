@@ -12,7 +12,7 @@ export function bestRecordText(save) {
   let best = null;
   for (const d of diffs) {
     const key = d.id === 'endless' ? 'endless' + d.floor : d.id;
-    const wave = save.diff.best[key] || 0;
+    const wave = (save.diff.best || {})[key] || 0;
     if (!best || wave > best.wave) best = { diff: d, wave };
   }
   if (!best || best.wave <= 0) return '最高纪录：坚守 ' + (save.bestWave || 0) + ' 波';

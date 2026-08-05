@@ -47,4 +47,26 @@ describe('bestRecordText', () => {
     };
     expect(bestRecordText(save)).toBe('最高纪录：普通 40 波');
   });
+
+  it('returns the highest endless floor record when endless is the only unlocked diff', () => {
+    const save = {
+      diff: {
+        unlocked: ['endless'],
+        endlessFloor: 2,
+        best: { endless1: 20, endless2: 45 },
+        selected: { id: 'endless', floor: 2 },
+      },
+    };
+    expect(bestRecordText(save)).toBe('最高纪录：无尽·2层 45 波');
+  });
+
+  it('falls back to save.bestWave when no difficulty record exists', () => {
+    const save = { bestWave: 30, diff: { unlocked: ['easy'], endlessFloor: 1, best: {}, selected: { id: 'easy' } } };
+    expect(bestRecordText(save)).toBe('最高纪录：坚守 30 波');
+  });
+
+  it('does not crash and falls back when diff.best is undefined', () => {
+    const save = { bestWave: 30, diff: { unlocked: ['easy'], endlessFloor: 1, selected: { id: 'easy' } } };
+    expect(bestRecordText(save)).toBe('最高纪录：坚守 30 波');
+  });
 });
