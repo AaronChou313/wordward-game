@@ -259,7 +259,7 @@ export class EquipScene {
       ctx.textAlign = 'center';
       ctx.fillStyle = '#6a5a42';
       ctx.font = '26px KaiTi, STKaiti, serif';
-      ctx.fillText('暂无装备，战斗中击杀敌军有几率掉落', 375, 700);
+      ctx.fillText('暂无装备，战斗中击杀敌军有几率掉落', 375, listTop + 40);
       ctx.restore();
     }
 

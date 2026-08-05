@@ -193,7 +193,7 @@ export class InventoryScene {
 
     ctx.save();
     ctx.beginPath();
-    ctx.rect(50, 255, 650, 940);
+    ctx.rect(50, 291, 650, 940);
     ctx.clip();
     ctx.translate(0, -this.scroll);
     ids.forEach((id, i) => {
