@@ -4,6 +4,7 @@ import { Toast } from '../ui/toast.js';
 import { Audio } from '../core/audio.js';
 import { getSave, persist } from './saveData.js';
 import { availableDiffs } from '../config/difficulty.js';
+import { flushMeritClaims } from '../net/meritClient.js';
 
 export class HomeScene {
   constructor(scenes) {
@@ -22,7 +23,7 @@ export class HomeScene {
     ];
   }
 
-  enter() {}
+  enter() { flushMeritClaims(); }
 
   options() {
     return availableDiffs(getSave().diff);

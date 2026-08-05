@@ -158,6 +158,22 @@ describe('offline merit claim queue', () => {
 
     expect(queueContents()).toEqual([]);
   });
+
+  it('flushes queued merit claims after the user logs in', async () => {
+    storage.set('sgtd_meritQueue', JSON.stringify([
+      { userId: 'user-1', payload: battleClaim({ runId: 'run-queued-offline' }) },
+    ]));
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(sessionResponse('user-1'))
+      .mockResolvedValueOnce(response({ awarded: true, merit: 1, meritTotal: 9 }, 201));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await login('liubei', 'correct-horse-123');
+    const result = await flushMeritClaims();
+
+    expect(result).toEqual({ queued: false });
+    expect(queueContents()).toEqual([]);
+  });
 });
 
 function battleClaim(overrides = {}) {

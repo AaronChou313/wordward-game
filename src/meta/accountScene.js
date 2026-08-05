@@ -1,6 +1,7 @@
 import { Button } from '../ui/button.js';
 import { focusCanvasTextInput, resetCanvasTextInput } from '../ui/canvasTextInput.js';
 import { getCurrentUser, login, register, restoreSession } from '../net/apiClient.js';
+import { flushMeritClaims } from '../net/meritClient.js';
 import { authenticatedSceneName } from '../startup.js';
 
 export function validateAccountCredentials(usernameValue, passwordValue) {
@@ -105,6 +106,7 @@ export class AccountScene {
       else await register(credentials.username, credentials.password);
       this.active = null;
       resetCanvasTextInput();
+      flushMeritClaims(); // 补发登录前未提交的军功
       this.scenes.switch(authenticatedSceneName());
     } catch (error) {
       this.message = accountErrorMessage(error);

@@ -1,9 +1,22 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AccountScene, accountErrorMessage, validateAccountCredentials } from './accountScene.js';
 import { isCanvasTextInputActive } from '../ui/canvasTextInput.js';
+import { flushMeritClaims } from '../net/meritClient.js';
+
+vi.mock('../net/apiClient.js', () => ({
+  login: vi.fn(async () => ({ user: { id: 'u1' } })),
+  register: vi.fn(async () => ({})),
+  restoreSession: vi.fn(async () => null),
+  getCurrentUser: () => null,
+}));
+
+vi.mock('../net/meritClient.js', () => ({
+  flushMeritClaims: vi.fn(() => Promise.resolve({ queued: false })),
+}));
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.clearAllMocks();
 });
 
 describe('account credential validation', () => {
@@ -63,5 +76,19 @@ describe('account credential validation', () => {
     expect(scene.username).toBe('alice');
     expect(scene.password).toBe('secret');
     return submission;
+  });
+
+  it('flushes queued merit claims after a successful login', async () => {
+    vi.stubGlobal('document', { createElement: vi.fn(), body: { appendChild: vi.fn() } });
+    vi.stubGlobal('window', { scrollX: 0, scrollY: 0, scrollTo: vi.fn() });
+    const scenes = { switch: vi.fn() };
+    const scene = new AccountScene(scenes);
+    scene.username = 'alice';
+    scene.password = 'secret';
+
+    await scene.submitForm();
+
+    expect(flushMeritClaims).toHaveBeenCalledTimes(1);
+    expect(scenes.switch).toHaveBeenCalledWith('home');
   });
 });
