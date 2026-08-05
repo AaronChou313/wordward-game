@@ -9,12 +9,36 @@ export const RARITIES = [
 export const PLAYER_SLOTS = ['武器', '护甲', '饰品'];
 export const UNIT_SLOTS = ['兵', '骑', '枪', '弓', '炮'];
 
+// 套装：同名多件触发羁绊（2 件 / 3 件）
+export const SERIES = {
+  '虎啸': {
+    name: '虎啸', color: '#e0704a',
+    bonds: { 2: { atk: 0.08 }, 3: { atk: 0.15, spd: 0.08 } },
+  },
+  '龙腾': {
+    name: '龙腾', color: '#4a8ae0',
+    bonds: { 2: { lordHp: 2 }, 3: { lordHp: 4, blockerHp: 0.20 } },
+  },
+  '凤仪': {
+    name: '凤仪', color: '#c98ab8',
+    bonds: { 2: { coin: 0.15 }, 3: { coin: 0.25, stunDuration: 0.30 } },
+  },
+};
+
 export const EQUIP = {
-  // 玩家装备：作用于全军/主公
-  p_sword: { id: 'p_sword', name: '统帅之剑', kind: 'player', slot: '武器', stat: { atk: 0.08 }, statText: '全体攻击' },
-  p_armor: { id: 'p_armor', name: '主公铠甲', kind: 'player', slot: '护甲', stat: { lordHp: 3 }, statText: '主公生命' },
-  p_charm: { id: 'p_charm', name: '聚宝符',   kind: 'player', slot: '饰品', stat: { coin: 0.15 }, statText: '金币收益' },
+  // 玩家装备：作用于全军/主公（p_drum 独立散件，无套装）
+  p_sword: { id: 'p_sword', name: '统帅之剑', kind: 'player', slot: '武器', series: '虎啸', stat: { atk: 0.08 }, statText: '全体攻击' },
+  p_armor: { id: 'p_armor', name: '主公铠甲', kind: 'player', slot: '护甲', series: '虎啸', stat: { lordHp: 3 }, statText: '主公生命' },
+  p_charm: { id: 'p_charm', name: '聚宝符',   kind: 'player', slot: '饰品', series: '虎啸', stat: { coin: 0.15 }, statText: '金币收益' },
   p_drum:  { id: 'p_drum',  name: '进军战鼓', kind: 'player', slot: '饰品', stat: { spd: 0.08 }, statText: '全体攻速' },
+  // 龙腾套装
+  p_dragonWeapon:   { id: 'p_dragonWeapon',   name: '青龙戟', kind: 'player', slot: '武器', series: '龙腾', stat: { atk: 0.10 }, statText: '全体攻击' },
+  p_dragonArmor:    { id: 'p_dragonArmor',    name: '龙鳞甲', kind: 'player', slot: '护甲', series: '龙腾', stat: { lordHp: 3 }, statText: '主公生命' },
+  p_dragonTrinket:  { id: 'p_dragonTrinket',  name: '龙珠',   kind: 'player', slot: '饰品', series: '龙腾', stat: { coin: 0.12 }, statText: '金币收益' },
+  // 凤仪套装
+  p_phoenixWeapon:  { id: 'p_phoenixWeapon',  name: '凤翎扇', kind: 'player', slot: '武器', series: '凤仪', stat: { spd: 0.08 }, statText: '全体攻速' },
+  p_phoenixArmor:   { id: 'p_phoenixArmor',   name: '锦凤袍', kind: 'player', slot: '护甲', series: '凤仪', stat: { lordHp: 2 }, statText: '主公生命' },
+  p_phoenixTrinket: { id: 'p_phoenixTrinket', name: '凤钗',   kind: 'player', slot: '饰品', series: '凤仪', stat: { coin: 0.10 }, statText: '金币收益' },
   // 将士武器：佩戴到兵种槽，作用于该兵种所有将士
   u_blade: { id: 'u_blade', name: '环首刀', kind: 'unit', stat: { atk: 0.12 }, statText: '攻击' },
   u_spear: { id: 'u_spear', name: '亮银枪', kind: 'unit', stat: { atk: 0.06, spd: 0.06 }, statText: '攻击/攻速' },
@@ -67,4 +91,24 @@ export function rollRarity(wave, dropMul) {
 export function rollEquipId() {
   const ids = Object.keys(EQUIP);
   return ids[Math.floor(Math.random() * ids.length)];
+}
+
+// 套装羁绊聚合：按玩家槽位统计各套装件数，返回已触发的羁绊加成
+// （≥2 件触发 2 件套，≥3 件触发 3 件套并覆盖 2 件套）
+export function bondStats(slotMap, ownedList) {
+  const counts = {};
+  for (const slot of PLAYER_SLOTS) {
+    const uid = slotMap && slotMap[slot];
+    if (uid == null) continue;
+    const inst = (ownedList || []).find((e) => e.uid === uid);
+    const series = inst && EQUIP[inst.id] && EQUIP[inst.id].series;
+    if (series) counts[series] = (counts[series] || 0) + 1;
+  }
+  const out = {};
+  for (const [series, count] of Object.entries(counts)) {
+    const bond = SERIES[series] && SERIES[series].bonds[count >= 3 ? 3 : count === 2 ? 2 : 0];
+    if (!bond) continue;
+    for (const [k, v] of Object.entries(bond)) out[k] = (out[k] || 0) + v;
+  }
+  return out;
 }

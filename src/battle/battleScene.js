@@ -20,6 +20,7 @@ import { BASE_UNITS, ADV_CHARS } from '../config/units.js';
 import { HEROES, PREFIX_BUFFS, HERO_NAMES } from '../config/words.js';
 import { ITEMS, MAX_ACTIVE } from '../config/items.js';
 import { EQUIP, equipStats, dropChance, rollRarity, rollEquipId, rarityById } from '../config/equipment.js';
+import { applyBondStats } from './bond.js';
 import { CODEX_SET_BONUS, codexCat } from '../config/codex.js';
 import { Button, roundRect } from '../ui/button.js';
 import { drawPanel } from '../ui/panel.js';
@@ -175,6 +176,11 @@ export class BattleScene {
         else this.itemBuffs[k] = (this.itemBuffs[k] || 0) + s[k];
       }
     }
+
+    // 装备套装羁绊（2 件 / 3 件）并入战斗加成与主公生命
+    const bonds = applyBondStats(this.itemBuffs, save.equipment.player, save.equipment.owned);
+    this.itemBuffs = bonds;
+    this.lordHpBonus += bonds.lordHp || 0;
     this.lordHp = LORD_HP + Math.round(this.lordHpBonus);
 
     // 将士武器（按兵种）
