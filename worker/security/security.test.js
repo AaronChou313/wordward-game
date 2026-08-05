@@ -3,7 +3,7 @@ import { decodeBase64Url, encodeBase64Url } from './encoding.js';
 import { hashCursor, hashRefreshToken, requireSecret, SecretConfigurationError } from './hmac.js';
 import { signAccessToken, verifyAccessToken } from './jwt.js';
 import { clearRefreshCookie, setRefreshCookie } from './cookies.js';
-import { hashPassword, normalizeUsername, validateCredentials, verifyPassword } from './password.js';
+import { hashPassword, MAX_PASSWORD_ITERATIONS, MIN_PASSWORD_ITERATIONS, normalizeUsername, validateCredentials, verifyPassword } from './password.js';
 import { verifyTurnstile } from './turnstile.js';
 import { requireSameOrigin } from '../middleware/origin.js';
 import { consumeLimit } from '../middleware/limits.js';
@@ -39,6 +39,17 @@ describe('Worker security primitives', () => {
     await expect(hashPassword('correct horse', { iterations: 0 })).rejects.toThrow(/iterations/);
     await expect(hashPassword('correct horse', { iterations: Number.NaN })).rejects.toThrow(/iterations/);
     await expect(hashPassword('correct horse', { iterations: Number.POSITIVE_INFINITY })).rejects.toThrow(/iterations/);
+  });
+
+  it('caps PBKDF2 iterations at the Workers runtime limit', async () => {
+    expect(MAX_PASSWORD_ITERATIONS).toBe(100_000);
+    expect(MIN_PASSWORD_ITERATIONS).toBeLessThanOrEqual(1);
+    // Workers' WebCrypto throws NotSupportedError above 100k; rejecting it in
+    // validation keeps registration from surfacing as a transient 503.
+    await expect(hashPassword('correct horse', { iterations: MAX_PASSWORD_ITERATIONS + 1 })).rejects.toThrow(/iterations/);
+    const record = await hashPassword('correct horse', { iterations: MAX_PASSWORD_ITERATIONS });
+    expect(record.iterations).toBe(MAX_PASSWORD_ITERATIONS);
+    expect(await verifyPassword('correct horse', record)).toBe(true);
   });
 
   it('round-trips base64url without Node Buffer', () => {

@@ -12,7 +12,7 @@
 	"vars": {
 		"APP_ORIGIN": "https://sheepgame.top",
 		"PASSWORD_KDF_VERSION": "PBKDF2-SHA-256-v1",
-		"PASSWORD_KDF_ITERATIONS": "120000"
+		"PASSWORD_KDF_ITERATIONS": "100000"
 	},
 	"ratelimits": [
 		{
@@ -54,7 +54,7 @@
 			"vars": {
 				"APP_ORIGIN": "https://preview.sheepgame.top",
 				"PASSWORD_KDF_VERSION": "PBKDF2-SHA-256-v1",
-				"PASSWORD_KDF_ITERATIONS": "120000",
+				"PASSWORD_KDF_ITERATIONS": "100000",
 				"TURNSTILE_SITE_KEY": "0x4AAAAAAEGJr-w6bbUuMTko"
 			},
 			"d1_databases": [
@@ -105,7 +105,7 @@
 			"vars": {
 				"APP_ORIGIN": "https://sheepgame.top",
 				"PASSWORD_KDF_VERSION": "PBKDF2-SHA-256-v1",
-				"PASSWORD_KDF_ITERATIONS": "120000",
+				"PASSWORD_KDF_ITERATIONS": "100000",
 				"TURNSTILE_SITE_KEY": "0x4AAAAAAEGJoDnt4kV2q6kK"
 			},
 			"d1_databases": [
