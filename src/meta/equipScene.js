@@ -3,12 +3,13 @@ import { Button } from '../ui/button.js';
 import { drawPanel } from '../ui/panel.js';
 import { Toast } from '../ui/toast.js';
 import { Audio } from '../core/audio.js';
-import { EQUIP, RARITIES, PLAYER_SLOTS, UNIT_SLOTS, equipStats, equipStatText, rarityById } from '../config/equipment.js';
-import { getSave, persist, equipByUid, spendGems } from './saveData.js';
+import { EQUIP, RARITIES, PLAYER_SLOTS, UNIT_SLOTS, equipStats, equipStatText, rarityById, rollAffixes } from '../config/equipment.js';
+import { getSave, persist, equipByUid, spendGems, spendSoulJade } from './saveData.js';
 
 const SLOT_Y = 290, SLOT_H = 120;
 const LIST_Y = 470, ROW_H = 96;
 const ENHANCE_X = 560, ENHANCE_W = 120, ENHANCE_H = 56;
+const REFINE_X = 440, REFINE_W = 108; // 洗练按钮：置于提升按钮（560~680）左侧
 const TAP_DIST = 10;
 
 export class EquipScene {
@@ -42,6 +43,16 @@ export class EquipScene {
     persist();
     Audio.coin();
     Toast.show(inst.id + ' 升至 Lv' + inst.lvl);
+  }
+
+  refine(uid) {
+    const inst = equipByUid(uid);
+    if (!inst) return Toast.show('装备不存在');
+    if (!spendSoulJade(1)) return Toast.show('魂玉不足');
+    inst.affixes = rollAffixes(inst.rarity);
+    persist();
+    Audio.place();
+    Toast.show('洗练完成，附加词条已刷新');
   }
 
   slotRects() {
@@ -100,6 +111,10 @@ export class EquipScene {
     return { x: ENHANCE_X, y: rowY + 20, w: ENHANCE_W, h: ENHANCE_H };
   }
 
+  refineRect(rowY) {
+    return { x: REFINE_X, y: rowY + 20, w: REFINE_W, h: ENHANCE_H };
+  }
+
   onPointerUp(x, y) {
     const press = this.press;
     this.press = null;
@@ -115,7 +130,14 @@ export class EquipScene {
         this.enhance(list[i].uid);
         return;
       }
-      if (x >= 60 && x < ENHANCE_X && y >= ry && y <= ry + ROW_H - 10) {
+      // 行内洗练按钮（提升按钮左侧 440~548）：消耗 1 魂玉重随附加词条
+      const rr = this.refineRect(ry);
+      if (x >= rr.x && x <= rr.x + rr.w && y >= rr.y && y <= rr.y + rr.h) {
+        this.refine(list[i].uid);
+        return;
+      }
+      // 行内装备区域（洗练按钮左侧）：点击装备/卸下
+      if (x >= 60 && x < REFINE_X && y >= ry && y <= ry + ROW_H - 10) {
         const inst = list[i];
         const save = getSave();
         if (this.tab === 'player') {
@@ -242,6 +264,18 @@ export class EquipScene {
       ctx.font = '22px KaiTi, STKaiti, serif';
       ctx.textAlign = 'center';
       ctx.fillText('升 ' + (10 + 5 * (inst.lvl - 1)) + '宝', er.x + er.w / 2, er.y + er.h / 2);
+
+      // 洗练按钮（提升按钮左侧）：消耗 1 魂玉重随附加词条
+      const rr = this.refineRect(ry);
+      ctx.fillStyle = '#3a3a4a';
+      ctx.fillRect(rr.x, rr.y, rr.w, rr.h);
+      ctx.strokeStyle = '#9a8ac0';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(rr.x, rr.y, rr.w, rr.h);
+      ctx.fillStyle = '#e0d8f0';
+      ctx.font = '22px KaiTi, STKaiti, serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('洗练 1魂', rr.x + rr.w / 2, rr.y + rr.h / 2);
       ctx.restore();
     });
 

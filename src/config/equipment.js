@@ -48,12 +48,40 @@ export const EQUIP = {
 
 export const rarityById = (id) => RARITIES.find((r) => r.id === id) || RARITIES[0];
 
-// 单件装备的实际数值（稀有度倍率 × 等级成长）
+// 附加词条池与稀有度档位（洗练/掉落重随）
+export const AFFIX_POOL = ['atk', 'spd', 'crit', 'range', 'coin', 'lordHp'];
+export const AFFIX_BOUNDS = {
+  common: { count: 1, min: 0.02, max: 0.05 },
+  fine:   { count: 1, min: 0.03, max: 0.07 },
+  rare:   { count: 2, min: 0.04, max: 0.09 },
+  epic:   { count: 3, min: 0.05, max: 0.12 },
+};
+
+export function rollAffixes(rarity, random = Math.random) {
+  const cfg = AFFIX_BOUNDS[rarity] || AFFIX_BOUNDS.common;
+  const count = cfg.count;
+  const affixes = [];
+  for (let i = 0; i < count; i++) {
+    const key = AFFIX_POOL[Math.floor(random() * AFFIX_POOL.length)];
+    const value = cfg.min + (cfg.max - cfg.min) * random();
+    affixes.push({ key, value: Number(value.toFixed(4)) });
+  }
+  return affixes;
+}
+
+export function rollEquipInstance(id, rarity, random = Math.random) {
+  return { id, rarity, lvl: 1, affixes: rollAffixes(rarity, random) };
+}
+
+// 单件装备的实际数值（稀有度倍率 × 等级成长 + 附加词条）
 export function equipStats(inst) {
   const def = EQUIP[inst.id];
   const mul = rarityById(inst.rarity).mul * (1 + 0.08 * (inst.lvl - 1));
   const out = {};
   for (const k in def.stat) out[k] = def.stat[k] * mul;
+  for (const affix of inst.affixes || []) {
+    out[affix.key] = (out[affix.key] || 0) + affix.value;
+  }
   return out;
 }
 

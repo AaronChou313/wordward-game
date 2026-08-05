@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EQUIP, bondStats } from './equipment.js';
+import { EQUIP, bondStats, rollEquipInstance, equipStats } from './equipment.js';
 
 describe('equipment series bonds', () => {
   it('returns nothing when fewer than two of a series are equipped', () => {
@@ -39,5 +39,18 @@ describe('equipment series bonds', () => {
       { uid: 'u3', id: 'p_phoenixTrinket', rarity: 'common', lvl: 1, affixes: [] },
     ];
     expect(bondStats({ '武器': 'u1', '护甲': 'u2', '饰品': 'u3' }, owned)).toMatchObject({ coin: 0.25, stunDuration: 0.30 });
+  });
+});
+
+describe('equipment affixes', () => {
+  it('rolls affixes on new equipment based on rarity', () => {
+    const inst = rollEquipInstance('p_sword', 'epic', () => 0.5);
+    expect(inst.affixes.length).toBeGreaterThanOrEqual(2); // epic gets 2-3
+  });
+
+  it('equipStats includes affix values', () => {
+    const inst = { id: 'p_sword', rarity: 'common', lvl: 1, affixes: [{ key: 'crit', value: 0.04 }] };
+    const stats = equipStats(inst);
+    expect(stats.crit).toBeCloseTo(0.04);
   });
 });

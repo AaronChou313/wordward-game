@@ -125,4 +125,31 @@ describe('migrateSave', () => {
     expect(second.merit.claimed).toEqual(first.merit.claimed);
     expect(second.merit.total).toBe(49);
   });
+
+  it('fills missing affixes on legacy equipment deterministically', () => {
+    const legacySave = () => ({
+      version: 3,
+      equipment: {
+        owned: [
+          { uid: 1, id: 'p_sword', rarity: 'rare', lvl: 2 },
+          { uid: 2, id: 'p_drum', rarity: 'common', lvl: 1 },
+        ],
+        nextUid: 3,
+        player: { '武器': null, '护甲': null, '饰品': null },
+        units: { '兵': null, '骑': null, '枪': null, '弓': null, '炮': null },
+      },
+    });
+
+    const first = migrateSave(legacySave());
+    const second = migrateSave(legacySave());
+
+    for (const inst of first.equipment.owned) {
+      expect(Array.isArray(inst.affixes)).toBe(true);
+      expect(inst.affixes.length).toBeGreaterThan(0);
+    }
+    // same input -> same affixes across two migrateSave calls
+    expect(first.equipment.owned).toEqual(second.equipment.owned);
+    expect(first.equipment.owned[0].affixes).toEqual(second.equipment.owned[0].affixes);
+    expect(first.equipment.owned[1].affixes).toEqual(second.equipment.owned[1].affixes);
+  });
 });

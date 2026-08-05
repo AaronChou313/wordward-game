@@ -26,6 +26,7 @@ vi.mock('./saveData.js', () => ({
   persist: () => {},
   equipByUid: (uid) => currentSave.equipment.owned.find((e) => e.uid === uid) || null,
   spendGems: (n) => { if ((currentSave.gems || 0) < n) return false; currentSave.gems -= n; return true; },
+  spendSoulJade: (n) => { if ((currentSave.soulJade || 0) < n) return false; currentSave.soulJade -= n; return true; },
 }));
 
 import { EquipScene } from './equipScene.js';
@@ -66,5 +67,20 @@ describe('EquipScene list scrolling', () => {
     scene.enhance(inst.uid);
     expect(inst.lvl).toBe(2);
     expect(save.gems).toBe(0); // 10 - 10 (lvl1 提升成本 = 10 + 5*0)
+  });
+
+  it('refines an equipment instance with soul jade, re-rolling affixes', () => {
+    const scene = new EquipScene({ switch: () => {} });
+    const save = fakeSave(1);
+    const inst = save.equipment.owned[0];
+    inst.affixes = [{ key: 'atk', value: 0.03 }]; // legacy-style pre-refine affixes
+    expect(save.soulJade).toBe(3);
+
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    scene.refine(inst.uid);
+
+    expect(save.soulJade).toBe(2); // cost 1 soul jade
+    // common rarity re-rolls 1 affix; random=0.5 -> key 'range', value 0.02+(0.05-0.02)*0.5
+    expect(inst.affixes).toEqual([{ key: 'range', value: 0.035 }]);
   });
 });
