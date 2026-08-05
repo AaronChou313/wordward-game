@@ -23,6 +23,7 @@ export class InventoryScene {
     this.btnBack = new Button(39, 40, 140, 56, '返回', () => { Audio.click(); scenes.switch('home'); }, { fontSize: 26 });
     this.scroll = 0;
     this.press = null;
+    this.barHits = []; // 已装备栏各道具命中区域 [{id, x, w}]，渲染时记录，供点击卸下
   }
 
   enter() {
@@ -111,9 +112,18 @@ export class InventoryScene {
     const press = this.press;
     this.press = null;
     if (!press || press.moved) return;
+
+    // 点击已装备栏：命中某个道具则卸下
+    if (y >= 255 && y <= 290) {
+      for (const h of this.barHits) {
+        if (x >= h.x && x <= h.x + h.w) return this.toggleEquip(h.id);
+      }
+      return;
+    }
+
     const ids = this.ownedIds();
     for (let i = 0; i < ids.length; i++) {
-      const rowY = 270 + i * 150 - this.scroll;
+      const rowY = 320 + i * 150 - this.scroll;
       if (y < rowY + 96 || y > rowY + 132) continue;
       // 三个操作按钮：装备/卸下、升级、出售
       if (x >= 250 && x <= 360) return this.toggleEquip(ids[i]);
@@ -123,13 +133,13 @@ export class InventoryScene {
   }
 
   maxScroll() {
-    return Math.max(0, this.ownedIds().length * 150 - 900);
+    return Math.max(0, this.ownedIds().length * 150 - 840);
   }
 
   render(ctx) {
     ctx.fillStyle = '#181209';
     ctx.fillRect(0, 0, 750, 1334);
-    drawPanel(ctx, 25, 120, 700, 1160, '背 包');
+    drawPanel(ctx, 25, 120, 700, 1160, '道 具');
     this.btnBack.draw(ctx);
 
     const s = getSave();
@@ -144,6 +154,31 @@ export class InventoryScene {
     ctx.fillText(`主动战术 ${s.items.equippedActive.length}/${MAX_ACTIVE} · 点击/拖拽后在战斗中施放`, 60, 205);
     ctx.fillStyle = '#79b8a8';
     ctx.fillText(`被动军略 ${s.items.equippedPassive.length}/${MAX_PASSIVE} · 装备后持续生效，无需操作`, 60, 235);
+    ctx.restore();
+
+    // 已装备栏：固定于列表上方，列出当前装备的主动+被动道具，点击可卸下
+    const equippedActive = s.items.equippedActive.map((e) => ITEMS[e.id].name);
+    const equippedPassive = s.items.equippedPassive.map((e) => ITEMS[e.id].name);
+    const equippedNames = equippedActive.concat(equippedPassive);
+    const barText = equippedNames.join('、') || '（无）';
+    this.barHits = [];
+    ctx.save();
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#ffd75a';
+    ctx.font = '22px KaiTi, STKaiti, serif';
+    ctx.fillText('已装备', 60, 272);
+    ctx.fillStyle = '#f0d8a8';
+    if (equippedNames.length > 0) {
+      let x = 150;
+      equippedNames.forEach((name, i) => {
+        ctx.fillText(name, x, 272);
+        const w = ctx.measureText(name).width || name.length * 22;
+        this.barHits.push({ id: equippedActive[i] !== undefined ? s.items.equippedActive[i].id : s.items.equippedPassive[i - equippedActive.length].id, x, w });
+        x += w + 12;
+      });
+    } else {
+      ctx.fillText(barText, 150, 272);
+    }
     ctx.restore();
 
     const ids = this.ownedIds();
@@ -162,7 +197,7 @@ export class InventoryScene {
     ctx.clip();
     ctx.translate(0, -this.scroll);
     ids.forEach((id, i) => {
-      const y = 270 + i * 150;
+      const y = 320 + i * 150;
       const item = ITEMS[id];
       const lvl = s.items.owned[id];
       const equipped = this.isEquipped(id);
