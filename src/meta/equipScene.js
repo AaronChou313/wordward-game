@@ -3,10 +3,11 @@ import { Button } from '../ui/button.js';
 import { drawPanel } from '../ui/panel.js';
 import { Toast } from '../ui/toast.js';
 import { Audio } from '../core/audio.js';
-import { EQUIP, RARITIES, PLAYER_SLOTS, UNIT_SLOTS, equipStats, equipStatText, rarityById, rollAffixes } from '../config/equipment.js';
+import { EQUIP, RARITIES, PLAYER_SLOTS, equipStats, equipStatText, rarityById, rollAffixes, unitSlotNames as resolveUnitSlotNames } from '../config/equipment.js';
 import { getSave, persist, equipByUid, spendGems, spendSoulJade } from './saveData.js';
 
 const SLOT_Y = 290, SLOT_H = 120;
+const SLOT_W = 124, SLOT_GAP = 10, SLOT_MARGIN = 40, SLOT_ROW_GAP = 10;
 const LIST_Y = 470, ROW_H = 96;
 const ENHANCE_X = 560, ENHANCE_W = 120, ENHANCE_H = 56;
 const REFINE_X = 440, REFINE_W = 108; // 洗练按钮：置于提升按钮（560~680）左侧
@@ -27,7 +28,8 @@ export class EquipScene {
   enter() { this.selectedUid = null; this.scroll = 0; this.press = null; }
 
   maxScroll() {
-    return Math.max(0, this.ownedOf(this.tab).length * ROW_H - 640);
+    const viewH = 1334 - this.listTopFor(this.slotRects()) - 224; // 底部留白同单行（410→470）间距
+    return Math.max(0, this.ownedOf(this.tab).length * ROW_H - viewH);
   }
 
   ownedOf(kind) {
@@ -55,13 +57,36 @@ export class EquipScene {
     Toast.show('洗练完成，附加词条已刷新');
   }
 
+  // 动态将士武器槽位：基础兵种 + 已解锁英雄
+  unitSlotNames(save) {
+    return resolveUnitSlotNames(save);
+  }
+
+  // 拥有列表顶部：位于最后一个槽位下方 60px（对齐单行时 410→470 的间距）
+  listTopFor(rects) {
+    const last = rects[rects.length - 1];
+    const lastBottom = last ? last.y + last.h : SLOT_Y + SLOT_H;
+    return lastBottom + 60;
+  }
+
   slotRects() {
-    const slots = this.tab === 'player' ? PLAYER_SLOTS : UNIT_SLOTS;
-    const w = this.tab === 'player' ? 200 : 124;
-    const gap = this.tab === 'player' ? 30 : 10;
-    const totalW = slots.length * w + (slots.length - 1) * gap;
-    const x0 = (750 - totalW) / 2;
-    return slots.map((name, i) => ({ name, x: x0 + i * (w + gap), y: SLOT_Y, w, h: SLOT_H }));
+    const slots = this.tab === 'player' ? PLAYER_SLOTS : resolveUnitSlotNames(getSave());
+    const w = this.tab === 'player' ? 200 : SLOT_W;
+    const gap = this.tab === 'player' ? 30 : SLOT_GAP;
+    if (this.tab === 'player') {
+      const totalW = slots.length * w + (slots.length - 1) * gap;
+      const x0 = (750 - totalW) / 2;
+      return slots.map((name, i) => ({ name, x: x0 + i * (w + gap), y: SLOT_Y, w, h: SLOT_H }));
+    }
+    // 将士武器：槽位多于一行时换行（每行 5 个），各行 y 依次下移
+    const slotsPerRow = Math.max(1, Math.floor((750 - 2 * SLOT_MARGIN) / (SLOT_W + SLOT_GAP)));
+    const rowWidth = slotsPerRow * SLOT_W + (slotsPerRow - 1) * SLOT_GAP;
+    const x0 = (750 - rowWidth) / 2;
+    return slots.map((name, i) => {
+      const row = Math.floor(i / slotsPerRow);
+      const col = i % slotsPerRow;
+      return { name, x: x0 + col * (w + gap), y: SLOT_Y + row * (SLOT_H + SLOT_ROW_GAP), w, h: SLOT_H };
+    });
   }
 
   onPointerDown(x, y) {
@@ -69,17 +94,12 @@ export class EquipScene {
     if (this.btnTabPlayer.hitTest(x, y)) return this.btnTabPlayer.onClick();
     if (this.btnTabUnit.hitTest(x, y)) return this.btnTabUnit.onClick();
 
-    // 仅列表区域（槽位下方）捕获拖动；区域起点在槽位区（y≈290~410）之下
-    if (x >= 60 && x <= 681 && y >= LIST_Y - 20) {
-      this.press = { x, y, scroll: this.scroll, moved: false };
-      return;
-    }
-
     const save = getSave();
     const rects = this.slotRects();
     const slotMap = this.tab === 'player' ? save.equipment.player : save.equipment.units;
 
     // 点槽位：将士武器 tab 且有选中武器 → 装备；否则卸下
+    // （槽位可能换行下移，故先于拖动捕获区判断，避免低行槽位被当作拖动）
     for (const r of rects) {
       if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) {
         if (this.tab === 'unit' && this.selectedUid != null) {
@@ -96,6 +116,12 @@ export class EquipScene {
         }
         return;
       }
+    }
+
+    // 仅列表区域（槽位下方）捕获拖动；区域起点在槽位区（y≈290~410）之下
+    if (x >= 60 && x <= 681 && y >= LIST_Y - 20) {
+      this.press = { x, y, scroll: this.scroll, moved: false };
+      return;
     }
   }
 
@@ -122,8 +148,10 @@ export class EquipScene {
 
     // 点列表项（行 y 依 scroll 偏移）；拖动超过阈值时不触发
     const list = this.ownedOf(this.tab);
+    const rects = this.slotRects();
+    const listTop = this.listTopFor(rects);
     for (let i = 0; i < list.length; i++) {
-      const ry = LIST_Y + i * ROW_H - this.scroll;
+      const ry = listTop + i * ROW_H - this.scroll;
       // 行内提升按钮（右侧 560~680）：先命中则提升，不触发整行装备
       const er = this.enhanceRect(ry);
       if (x >= er.x && x <= er.x + er.w && y >= er.y && y <= er.y + er.h) {
@@ -180,7 +208,8 @@ export class EquipScene {
 
     // 槽位
     const slotMap = this.tab === 'player' ? save.equipment.player : save.equipment.units;
-    for (const r of this.slotRects()) {
+    const rects = this.slotRects();
+    for (const r of rects) {
       const inst = equipByUid(slotMap[r.name]);
       ctx.save();
       ctx.fillStyle = 'rgba(50, 38, 24, 0.8)';
@@ -208,18 +237,20 @@ export class EquipScene {
       ctx.restore();
     }
 
-    // 拥有列表
+    // 拥有列表（剪辑区起点位于最后一个槽位下方，让出多行槽位空间）
     const list = this.ownedOf(this.tab);
+    const listTop = this.listTopFor(rects);
+    const listH = 1334 - listTop - 160;
     ctx.save();
     ctx.textAlign = 'left';
     ctx.fillStyle = '#a8895a';
     ctx.font = '22px KaiTi, STKaiti, serif';
-    ctx.fillText(this.tab === 'player' ? '拥有装备（点击装备/卸下）' : '拥有武器（点击选中，再点兵种槽佩戴）', 60, 445);
+    ctx.fillText(this.tab === 'player' ? '拥有装备（点击装备/卸下）' : '拥有武器（点击选中，再点兵种槽佩戴）', 60, listTop - 25);
     ctx.restore();
 
     ctx.save();
     ctx.beginPath();
-    ctx.rect(60, 470, 621, 640);
+    ctx.rect(60, listTop, 621, listH);
     ctx.clip();
     ctx.translate(0, -this.scroll);
 
@@ -233,7 +264,7 @@ export class EquipScene {
     }
 
     list.forEach((inst, i) => {
-      const ry = LIST_Y + i * ROW_H;
+      const ry = listTop + i * ROW_H;
       const equipped = (this.tab === 'player' ? Object.values(save.equipment.player) : Object.values(save.equipment.units)).includes(inst.uid);
       const selected = this.selectedUid === inst.uid;
       ctx.save();

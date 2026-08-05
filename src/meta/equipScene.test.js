@@ -12,6 +12,7 @@ function fakeSave(ownedCount = 3) {
   }
   currentSave = {
     gold: 300, gems: 10, soulJade: 3,
+    unlockedChars: ['精', '铁', '赵', '云', '吕', '布'],
     equipment: {
       owned, nextUid: ownedCount + 1,
       player: { '武器': null, '护甲': null, '饰品': null },
@@ -82,5 +83,36 @@ describe('EquipScene list scrolling', () => {
     expect(save.soulJade).toBe(2); // cost 1 soul jade
     // common rarity re-rolls 1 affix; random=0.5 -> key 'range', value 0.02+(0.05-0.02)*0.5
     expect(inst.affixes).toEqual([{ key: 'range', value: 0.035 }]);
+  });
+});
+
+describe('EquipScene dynamic unit weapon slots', () => {
+  it('includes unlocked heroes in unit weapon slots', () => {
+    const scene = new EquipScene({ switch: () => {} });
+    const save = fakeSave(1);
+    // unlockedChars 含 赵/云/吕/布，故 赵云、吕布 解锁
+    const slots = scene.unitSlotNames(save);
+    expect(slots).toEqual(expect.arrayContaining(['兵', '骑', '枪', '弓', '炮', '赵云', '吕布']));
+    expect(slots).not.toContain('诸葛亮'); // 未解锁 诸/葛/亮
+  });
+
+  it('wraps dynamic slots into multiple rows on the units tab', () => {
+    const scene = new EquipScene({ switch: () => {} });
+    fakeSave(1);
+    scene.tab = 'unit';
+    const rects = scene.slotRects();
+    expect(rects.length).toBe(scene.unitSlotNames(currentSave).length);
+    const ys = new Set(rects.map((r) => r.y));
+    expect(ys.size).toBeGreaterThan(1); // 多于一行
+    // 同一行内不重叠，且都在屏幕宽度内
+    for (const r of rects) {
+      expect(r.x).toBeGreaterThanOrEqual(0);
+      expect(r.x + r.w).toBeLessThanOrEqual(750);
+    }
+    for (let i = 1; i < rects.length; i++) {
+      if (rects[i].y === rects[i - 1].y) {
+        expect(rects[i].x).toBeGreaterThanOrEqual(rects[i - 1].x + rects[i - 1].w);
+      }
+    }
   });
 });

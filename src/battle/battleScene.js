@@ -102,6 +102,13 @@ export function dispatchActiveItem(scene, active, target = null) {
   return result;
 }
 
+// 将士武器槽位键解析：英雄组/英雄傀儡用英雄全名（group.name / heroName），基础/进阶字用其单字符
+export function gearKeyFor(tower) {
+  if (tower.group) return tower.group.name;
+  if (tower.kind === 'hero' && tower.heroName) return tower.heroName;
+  return tower.char;
+}
+
 export function aggregatePassiveItemBuffs(equipped) {
   const aggregate = {};
   for (const entry of equipped || []) {
@@ -820,7 +827,7 @@ export class BattleScene {
       .filter((tower) => !tower.inert && !tower.group)
       .concat(this.heroGroups.map((group) => group.puppet));
     const targets = selectStunTargets(enemy, combatTowers, enemy.skill, (tower) => {
-      const gear = this.unitGear[tower.char];
+      const gear = this.unitGear[gearKeyFor(tower)];
       const stats = tower.stats(this.itemBuffs, gear);
       return stats ? stats.range : (tower.base ? tower.base.range : 0);
     });
@@ -938,7 +945,7 @@ export class BattleScene {
     if (!this.selected) return;
     const isGroup = this.selected instanceof HeroGroup;
     const puppet = isGroup ? this.selected.puppet : this.selected;
-    const s = puppet.stats(this.itemBuffs, this.unitGear[puppet.char]);
+    const s = puppet.stats(this.itemBuffs, this.unitGear[gearKeyFor(puppet)]);
 
     // 进阶字（未组词）：显示增益作用或可组词组
     if (!s) {

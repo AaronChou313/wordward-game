@@ -9,6 +9,19 @@ export const RARITIES = [
 export const PLAYER_SLOTS = ['武器', '护甲', '饰品'];
 export const UNIT_SLOTS = ['兵', '骑', '枪', '弓', '炮'];
 
+// 可佩戴武器的英雄名（全部字符解锁后才会出现在将士武器槽位）
+export const HERO_NAMES = ['赵云', '吕布', '诸葛亮', '关羽', '张飞', '曹操', '周瑜', '马超', '黄忠', '貂蝉', '孙尚香'];
+
+// 动态将士武器槽位：基础兵种 + 已解锁英雄（save.unlockedChars 含该人名的全部字符）
+export function unitSlotNames(save) {
+  const base = UNIT_SLOTS.slice();
+  const heroes = HERO_NAMES.filter((name) => {
+    const chars = Array.from(name);
+    return chars.every((ch) => save.unlockedChars.includes(ch));
+  });
+  return base.concat(heroes);
+}
+
 // 套装：同名多件触发羁绊（2 件 / 3 件）
 export const SERIES = {
   '虎啸': {
