@@ -94,17 +94,23 @@ export const ACTIVE_ITEM_HANDLERS = {
     const target = alive.reduce((max, e) => (e.hp > max.hp ? e : max));
     const damage = item.effect.damageAt(active.level);
     scene.effects.tracer(target.x, target.y - 80, target.x, target.y, '#ffd75a');
+    const before = target.hp;
     if (target.takeDamage(damage)) scene.handleKill(target, null);
-    scene.effects.damageText(target.x, target.y - 48, '-' + damage, '#ffd75a', 30);
+    // 飘字按实际造成伤害显示（可能因敌方剩余生命不足而低于 damage）
+    const applied = before - Math.max(0, target.hp);
+    scene.effects.damageText(target.x, target.y - 48, '-' + applied, '#ffd75a', 30);
     scene.effects.shake(6, 0.18);
     return { used: true, message: `${item.name}：雷击最强者`, sound: 'boom' };
   },
   'heal-lord': (scene, active, item) => {
     const heal = item.effect.healAt(active.level);
+    const before = scene.lordHp;
     scene.lordHp = Math.min(scene.lordHpMax(), scene.lordHp + heal);
-    scene.effects.damageText(375, 120, '+' + heal, '#7fe08a', 30);
+    // 飘字与提示按实际回复显示（可能因达到上限而低于 heal）
+    const gained = scene.lordHp - before;
+    scene.effects.damageText(375, 120, '+' + gained, '#7fe08a', 30);
     scene.effects.ring(375, 120, '#7fe08a', 20, 260);
-    return { used: true, message: `${item.name}：主公回复 ${heal} 生命`, sound: 'click' };
+    return { used: true, message: `${item.name}：主公回复 ${gained} 生命`, sound: 'click' };
   },
   'summon-random': (scene, _active, item) => {
     const chars = Object.keys(BASE_UNITS);

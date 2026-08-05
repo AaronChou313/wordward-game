@@ -55,6 +55,21 @@ describe('active item: damage-strongest (雷击符)', () => {
     expect(scene.score.kills).toBe(1);
   });
 
+  it('clamps the damage text to the actual hp lost on overkill', () => {
+    const scene = freshScene();
+    const target = new Enemy(30, 0); // 目标 hp 30，小于雷击伤害 220
+    scene.enemies = [target];
+    const active = { id: 'thunder', level: 1, cd: 0 };
+
+    const result = dispatchActiveItem(scene, active);
+
+    expect(result.used).toBe(true);
+    expect(target.dead).toBe(true);
+    const floating = scene.effects.texts.at(-1);
+    expect(floating.text).toBe('-30');
+    expect(floating.color).toBe('#ffd75a');
+  });
+
   it('refuses to fire when no enemies are alive', () => {
     const scene = freshScene();
     scene.enemies = [new Enemy(10, 0)];
@@ -89,6 +104,20 @@ describe('active item: heal-lord (治疗符)', () => {
     dispatchActiveItem(scene, active);
 
     expect(scene.lordHp).toBe(scene.lordHpMax());
+  });
+
+  it('reports the actual hp gained when healing would overfill', () => {
+    const scene = freshScene();
+    scene.lordHp = 18; // 上限 20，可回复 2，不足 heal 21
+    const active = { id: 'heal', level: 20, cd: 0 };
+
+    const result = dispatchActiveItem(scene, active);
+
+    expect(result).toMatchObject({ used: true, message: '治疗符：主公回复 2 生命', sound: 'click' });
+    expect(scene.lordHp).toBe(20);
+    const floating = scene.effects.texts.at(-1);
+    expect(floating.text).toBe('+2');
+    expect(floating.color).toBe('#7fe08a');
   });
 
   it('computes the lord max hp from the base and the bonus', () => {
@@ -136,6 +165,8 @@ describe('active item: summon-random (召唤符)', () => {
       scene.towers.push(tower);
     }
     expect(scene.towers.length).toBe(count);
+    // 固定抽到非「兵」字符，避免随机抽到「兵」时被放到路径格上（兵允许阻挡，不属于空位）
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0.99);
     const active = { id: 'summon', level: 1, cd: 0 };
 
     const result = dispatchActiveItem(scene, active);
@@ -143,6 +174,7 @@ describe('active item: summon-random (召唤符)', () => {
     expect(result).toEqual({ used: false, message: '没有可放置的位置' });
     expect(scene.towers.length).toBe(count);
     expect(active.cd).toBe(0);
+    random.mockRestore();
   });
 });
 
