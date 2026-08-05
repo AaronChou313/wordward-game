@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EQUIP, bondStats, rollEquipInstance, equipStats } from './equipment.js';
+import { EQUIP, bondStats, rollEquipInstance, equipStats, sortEquipOwned } from './equipment.js';
 
 describe('equipment series bonds', () => {
   it('returns nothing when fewer than two of a series are equipped', () => {
@@ -52,5 +52,18 @@ describe('equipment affixes', () => {
     const inst = { id: 'p_sword', rarity: 'common', lvl: 1, affixes: [{ key: 'crit', value: 0.04 }] };
     const stats = equipStats(inst);
     expect(stats.crit).toBeCloseTo(0.04);
+  });
+});
+
+describe('equipment owned sorting', () => {
+  it('sorts equipment by rarity desc, level desc, then uid asc', () => {
+    const list = [
+      { uid: 1, id: 'p_sword', rarity: 'common', lvl: 3 },
+      { uid: 2, id: 'p_armor', rarity: 'epic', lvl: 1 },
+      { uid: 3, id: 'p_charm', rarity: 'rare', lvl: 5 },
+      { uid: 4, id: 'p_drum', rarity: 'rare', lvl: 5 },
+      { uid: 5, id: 'p_drum', rarity: 'fine', lvl: 8 },
+    ];
+    expect(sortEquipOwned(list).map((e) => e.uid)).toEqual([2, 3, 4, 5, 1]);
   });
 });

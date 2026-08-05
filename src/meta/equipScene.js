@@ -3,7 +3,7 @@ import { Button } from '../ui/button.js';
 import { drawPanel } from '../ui/panel.js';
 import { Toast } from '../ui/toast.js';
 import { Audio } from '../core/audio.js';
-import { EQUIP, RARITIES, PLAYER_SLOTS, equipStats, equipStatText, rarityById, rollAffixes, unitSlotNames as resolveUnitSlotNames } from '../config/equipment.js';
+import { EQUIP, RARITIES, PLAYER_SLOTS, equipStats, equipStatText, rarityById, rollAffixes, sortEquipOwned, unitSlotNames as resolveUnitSlotNames } from '../config/equipment.js';
 import { getSave, persist, equipByUid, spendGems, spendSoulJade } from './saveData.js';
 
 const SLOT_Y = 290, SLOT_H = 120;
@@ -39,7 +39,7 @@ export class EquipScene {
   }
 
   ownedOf(kind) {
-    return getSave().equipment.owned.filter((e) => EQUIP[e.id].kind === kind);
+    return sortEquipOwned(getSave().equipment.owned.filter((e) => EQUIP[e.id].kind === kind));
   }
 
   enhance(uid) {
