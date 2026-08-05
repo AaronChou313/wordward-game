@@ -70,7 +70,8 @@ export function sortEquipOwned(list) {
     if (r !== 0) return r;
     const l = (b.lvl ?? 0) - (a.lvl ?? 0);
     if (l !== 0) return l;
-    return (a.uid ?? 0) - (b.uid ?? 0);
+    const au = Number(a.uid) || 0, bu = Number(b.uid) || 0;
+    return au - bu;
   });
 }
 

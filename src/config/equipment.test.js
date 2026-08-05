@@ -61,7 +61,7 @@ describe('equipment owned sorting', () => {
       { uid: 1, id: 'p_sword', rarity: 'common', lvl: 3 },
       { uid: 2, id: 'p_armor', rarity: 'epic', lvl: 1 },
       { uid: 3, id: 'p_charm', rarity: 'rare', lvl: 5 },
-      { uid: 4, id: 'p_drum', rarity: 'rare', lvl: 5 },
+      { uid: 4, id: 'p_drum', rarity: 'rare', lvl: 3 },
       { uid: 5, id: 'p_drum', rarity: 'fine', lvl: 8 },
     ];
     expect(sortEquipOwned(list).map((e) => e.uid)).toEqual([2, 3, 4, 5, 1]);
