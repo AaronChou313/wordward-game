@@ -199,7 +199,7 @@ export class EquipScene {
     ctx.textAlign = 'right';
     ctx.fillStyle = '#e8c35a';
     ctx.font = '28px KaiTi, STKaiti, serif';
-    ctx.fillText('金币 ' + save.gold, 700, 70);
+    ctx.fillText(`金币 ${save.gold} · 宝石 ${save.gems || 0} · 魂玉 ${save.soulJade || 0}`, 700, 70);
     ctx.restore();
 
     // 页签

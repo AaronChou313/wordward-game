@@ -77,7 +77,7 @@ export class HomeScene {
     const save = getSave();
     ctx.fillStyle = '#f0d8a8';
     ctx.font = '30px KaiTi, STKaiti, serif';
-    ctx.fillText('金币 ' + save.gold, 375, 420);
+    ctx.fillText(`金币 ${save.gold} · 宝石 ${save.gems || 0} · 魂玉 ${save.soulJade || 0}`, 375, 420);
     ctx.fillStyle = '#a8d8a0';
     ctx.font = '26px KaiTi, STKaiti, serif';
     ctx.fillText('最高纪录：坚守 ' + save.bestWave + ' 波', 375, 465);
