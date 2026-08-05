@@ -103,7 +103,7 @@ describe('shop stock', () => {
     save.shop = { initialized: true, stock: ['recruit', 'train'] };
     const refreshed = refreshShopAfterBattle(save, () => 0);
     expect(refreshed).toHaveLength(4);
-    expect(save.shop.stock).not.toContain('fire');
+    expect(refreshed).toEqual(rollShopStock(Object.keys(save.items.owned), () => 0));
     const reopened = ensureShopStock(save, () => 0.9);
     expect(reopened).toEqual(save.shop.stock); // must not clear the fresh stock
     expect(reopened).toHaveLength(4);
