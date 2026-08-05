@@ -25,7 +25,7 @@ import { Button, roundRect } from '../ui/button.js';
 import { drawPanel } from '../ui/panel.js';
 import { Toast } from '../ui/toast.js';
 import { Audio } from '../core/audio.js';
-import { getSave, addGold, persist, grantEquip, equipByUid } from '../meta/saveData.js';
+import { getSave, addGold, addGems, addSoulJade, persist, grantEquip, equipByUid } from '../meta/saveData.js';
 import { recordCodexEncounter } from '../meta/codexDetails.js';
 import { refreshShopAfterBattle } from '../meta/shopStock.js';
 import { buildMeritClaim, queueMeritClaim } from '../net/meritClient.js';
@@ -624,6 +624,12 @@ export class BattleScene {
         ? def.name + '·' + r.name + ' 合成升至 Lv' + inst.lvl
         : '掉落 ' + def.name + '·' + r.name + '！');
       Audio.coin();
+    }
+    // 精英/Boss 概率掉宝石，Boss 概率掉魂玉
+    if (enemy.type === 'elite' && Math.random() < 0.4) addGems(Math.floor(Math.random() * 3) + 1);
+    if (enemy.type === 'boss') {
+      if (Math.random() < 0.7) addGems(Math.floor(Math.random() * 3) + 1);
+      if (Math.random() < 0.3) addSoulJade(1);
     }
     if (!tower) return;
     // 英雄组的击杀：经验分给每个成员字

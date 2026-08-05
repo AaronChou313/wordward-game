@@ -87,6 +87,28 @@ export function drawGacha(save, random = Math.random) {
     });
   }
 
+  if (reward.kind === 'gems') {
+    save.gems = (save.gems || 0) + reward.amount;
+    return finishResult(save, {
+      rarity,
+      rewardId: reward.id,
+      kind: reward.kind,
+      amount: reward.amount,
+      message: `获得宝石 ${reward.amount}`,
+    });
+  }
+
+  if (reward.kind === 'soulJade') {
+    save.soulJade = (save.soulJade || 0) + reward.amount;
+    return finishResult(save, {
+      rarity,
+      rewardId: reward.id,
+      kind: reward.kind,
+      amount: reward.amount,
+      message: `获得魂玉 ${reward.amount}`,
+    });
+  }
+
   return finishResult(save, {
     rarity,
     rewardId: reward.id,

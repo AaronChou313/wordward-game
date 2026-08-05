@@ -100,6 +100,11 @@ export function spendGold(n) {
   return true;
 }
 
+export function addGems(n) { getSave().gems += n; persist(); }
+export function addSoulJade(n) { getSave().soulJade += n; persist(); }
+export function spendGems(n) { const s = getSave(); if ((s.gems || 0) < n) return false; s.gems -= n; persist(); return true; }
+export function spendSoulJade(n) { const s = getSave(); if ((s.soulJade || 0) < n) return false; s.soulJade -= n; persist(); return true; }
+
 export function unlockChar(char) {
   const s = getSave();
   if (!s.unlockedChars.includes(char)) {
