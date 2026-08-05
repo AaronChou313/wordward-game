@@ -1,0 +1,60 @@
+import { describe, expect, it, vi } from 'vitest';
+
+// 由于 equipScene.js 以具名导入方式引用 ./saveData.js 的 getSave / persist / equipByUid，
+// 必须用 vi.mock 拦截模块（vi.stubGlobal 无法替换模块级具名导入）。
+// 工厂函数在场景模块被导入时执行，因此 fakeSave 需先定义、并通过模块级 currentSave 可变共享。
+let currentSave = null;
+
+function fakeSave(ownedCount = 3) {
+  const owned = [];
+  for (let i = 0; i < ownedCount; i++) {
+    owned.push({ uid: i + 1, id: 'p_sword', rarity: 'common', lvl: 1 });
+  }
+  currentSave = {
+    gold: 300, gems: 10, soulJade: 3,
+    equipment: {
+      owned, nextUid: ownedCount + 1,
+      player: { '武器': null, '护甲': null, '饰品': null },
+      units: { '兵': null, '骑': null, '枪': null, '弓': null, '炮': null },
+    },
+  };
+  return currentSave;
+}
+
+vi.mock('./saveData.js', () => ({
+  getSave: () => currentSave,
+  persist: () => {},
+  equipByUid: () => null,
+}));
+
+import { EquipScene } from './equipScene.js';
+
+describe('EquipScene list scrolling', () => {
+  it('does not equip when dragging past the threshold', () => {
+    const scene = new EquipScene({ switch: () => {} });
+    const save = fakeSave(8); // enough rows to scroll
+    scene.onPointerDown(100, 500);
+    scene.onPointerMove(105, 440); // moved 60px upward -> scrolls deeper
+    scene.onPointerUp(105, 440);
+    expect(scene.scroll).toBeGreaterThan(0);
+    expect(save.equipment.player['武器']).toBe(null); // 拖动不应触发装备
+  });
+
+  it('equips on a tap with no drag', () => {
+    const scene = new EquipScene({ switch: () => {} });
+    const save = fakeSave(3);
+    scene.onPointerDown(100, 500);
+    scene.onPointerUp(102, 501); // moved < 10px
+    expect(save.equipment.player['武器']).toBe(1); // first owned uid equipped
+  });
+
+  it('clamps scroll to the list bounds', () => {
+    const scene = new EquipScene({ switch: () => {} });
+    fakeSave(20);
+    scene.scroll = 999999;
+    scene.onPointerDown(100, 500);
+    scene.onPointerMove(105, 400); // drag up
+    scene.onPointerUp(105, 400);
+    expect(scene.scroll).toBeLessThanOrEqual(scene.maxScroll());
+  });
+});

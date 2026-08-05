@@ -8,18 +8,25 @@ import { getSave, persist, equipByUid } from './saveData.js';
 
 const SLOT_Y = 290, SLOT_H = 120;
 const LIST_Y = 470, ROW_H = 96;
+const TAP_DIST = 10;
 
 export class EquipScene {
   constructor(scenes) {
     this.scenes = scenes;
     this.tab = 'player'; // 'player' | 'unit'
     this.selectedUid = null; // 将士武器 tab 中选中的待装备武器
+    this.scroll = 0;
+    this.press = null;
     this.btnBack = new Button(39, 40, 140, 56, '返回', () => { Audio.click(); scenes.switch('home'); }, { fontSize: 26 });
-    this.btnTabPlayer = new Button(175, 195, 195, 60, '玩家装备', () => { Audio.click(); this.tab = 'player'; this.selectedUid = null; }, { fontSize: 28 });
-    this.btnTabUnit = new Button(380, 195, 195, 60, '将士武器', () => { Audio.click(); this.tab = 'unit'; }, { fontSize: 28 });
+    this.btnTabPlayer = new Button(175, 195, 195, 60, '玩家装备', () => { Audio.click(); this.tab = 'player'; this.selectedUid = null; this.scroll = 0; }, { fontSize: 28 });
+    this.btnTabUnit = new Button(380, 195, 195, 60, '将士武器', () => { Audio.click(); this.tab = 'unit'; this.scroll = 0; }, { fontSize: 28 });
   }
 
-  enter() { this.selectedUid = null; }
+  enter() { this.selectedUid = null; this.scroll = 0; this.press = null; }
+
+  maxScroll() {
+    return Math.max(0, this.ownedOf(this.tab).length * ROW_H - 640);
+  }
 
   ownedOf(kind) {
     return getSave().equipment.owned.filter((e) => EQUIP[e.id].kind === kind);
@@ -38,6 +45,12 @@ export class EquipScene {
     if (this.btnBack.hitTest(x, y)) return this.btnBack.onClick();
     if (this.btnTabPlayer.hitTest(x, y)) return this.btnTabPlayer.onClick();
     if (this.btnTabUnit.hitTest(x, y)) return this.btnTabUnit.onClick();
+
+    // 仅列表区域（槽位下方）捕获拖动；区域起点在槽位区（y≈290~410）之下
+    if (x >= 60 && x <= 681 && y >= LIST_Y - 20) {
+      this.press = { x, y, scroll: this.scroll, moved: false };
+      return;
+    }
 
     const save = getSave();
     const rects = this.slotRects();
@@ -61,13 +74,28 @@ export class EquipScene {
         return;
       }
     }
+  }
 
-    // 点列表项
+  onPointerMove(_x, y) {
+    if (!this.press) return;
+    if (Math.abs(y - this.press.y) > TAP_DIST) this.press.moved = true;
+    if (!this.press.moved) return;
+    const next = this.press.scroll + this.press.y - y;
+    this.scroll = Math.max(0, Math.min(this.maxScroll(), next));
+  }
+
+  onPointerUp(x, y) {
+    const press = this.press;
+    this.press = null;
+    if (!press || press.moved) return;
+
+    // 点列表项（行 y 依 scroll 偏移）；拖动超过阈值时不触发
     const list = this.ownedOf(this.tab);
     for (let i = 0; i < list.length; i++) {
-      const ry = LIST_Y + i * ROW_H;
+      const ry = LIST_Y + i * ROW_H - this.scroll;
       if (x >= 60 && x <= 681 && y >= ry && y <= ry + ROW_H - 10) {
         const inst = list[i];
+        const save = getSave();
         if (this.tab === 'player') {
           const slot = EQUIP[inst.id].slot;
           save.equipment.player[slot] = save.equipment.player[slot] === inst.uid ? null : inst.uid;
@@ -83,8 +111,6 @@ export class EquipScene {
       }
     }
   }
-  onPointerMove() {}
-  onPointerUp() {}
 
   update(dt) { Toast.update(dt); }
 
@@ -147,6 +173,12 @@ export class EquipScene {
     ctx.fillText(this.tab === 'player' ? '拥有装备（点击装备/卸下）' : '拥有武器（点击选中，再点兵种槽佩戴）', 60, 445);
     ctx.restore();
 
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(60, 470, 621, 640);
+    ctx.clip();
+    ctx.translate(0, -this.scroll);
+
     if (list.length === 0) {
       ctx.save();
       ctx.textAlign = 'center';
@@ -178,6 +210,8 @@ export class EquipScene {
       ctx.fillText(kindText + (equipped ? ' · 已装备' : ''), 80, ry + 62);
       ctx.restore();
     });
+
+    ctx.restore();
 
     Toast.render(ctx);
   }
