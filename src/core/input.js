@@ -1,4 +1,6 @@
 // 输入：触摸/鼠标统一为设计分辨率坐标下的点选/拖拽
+import { isCanvasTextInputActive, subscribeCanvasTextInputState } from '../ui/canvasTextInput.js';
+
 export const DESIGN_W = 750;
 export const DESIGN_H = 1334;
 
@@ -6,6 +8,7 @@ export function setupInput(canvas, handler) {
   const state = { scale: 1, offsetX: 0, offsetY: 0 };
 
   function resize() {
+    if (isCanvasTextInputActive()) return;
     const dpr = window.devicePixelRatio || 1;
     const w = window.innerWidth;
     const h = window.innerHeight;
@@ -19,6 +22,9 @@ export function setupInput(canvas, handler) {
     state.dpr = dpr;
   }
   window.addEventListener('resize', resize);
+  subscribeCanvasTextInputState((active) => {
+    if (!active) resize();
+  });
   resize();
 
   function toDesign(clientX, clientY) {

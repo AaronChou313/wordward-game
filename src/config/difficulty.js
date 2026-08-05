@@ -6,7 +6,7 @@ export const DIFFICULTIES = [
     id: 'easy', name: '简单',
     hpMul: 0.75, hpGrow: 1.20, countBase: 6, countGrow: 2,
     speedBase: 0.85, speedGrow: 0.018, intervalBase: 1.3,
-    coinMul: 0.8, shovelAdd: 0, advAdd: 0, dropMul: 0.7,
+    coinMul: 0.8, shovelAdd: 0.05, advAdd: 0, dropMul: 0.7,
   },
   {
     id: 'normal', name: '普通',

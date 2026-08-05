@@ -9,12 +9,49 @@ export const RARITIES = [
 export const PLAYER_SLOTS = ['武器', '护甲', '饰品'];
 export const UNIT_SLOTS = ['兵', '骑', '枪', '弓', '炮'];
 
+// 可佩戴武器的英雄名（全部字符解锁后才会出现在将士武器槽位）
+export const HERO_NAMES = ['赵云', '吕布', '诸葛亮', '关羽', '张飞', '曹操', '周瑜', '马超', '黄忠', '貂蝉', '孙尚香'];
+
+// 动态将士武器槽位：基础兵种 + 已解锁英雄（save.unlockedChars 含该人名的全部字符）
+export function unitSlotNames(save) {
+  const base = UNIT_SLOTS.slice();
+  const heroes = HERO_NAMES.filter((name) => {
+    const chars = Array.from(name);
+    return chars.every((ch) => save.unlockedChars.includes(ch));
+  });
+  return base.concat(heroes);
+}
+
+// 套装：同名多件触发羁绊（2 件 / 3 件）
+export const SERIES = {
+  '虎啸': {
+    name: '虎啸', color: '#e0704a',
+    bonds: { 2: { atk: 0.08 }, 3: { atk: 0.15, spd: 0.08 } },
+  },
+  '龙腾': {
+    name: '龙腾', color: '#4a8ae0',
+    bonds: { 2: { lordHp: 2 }, 3: { lordHp: 4, blockerHp: 0.20 } },
+  },
+  '凤仪': {
+    name: '凤仪', color: '#c98ab8',
+    bonds: { 2: { coin: 0.15 }, 3: { coin: 0.25, stunDuration: 0.30 } },
+  },
+};
+
 export const EQUIP = {
-  // 玩家装备：作用于全军/主公
-  p_sword: { id: 'p_sword', name: '统帅之剑', kind: 'player', slot: '武器', stat: { atk: 0.08 }, statText: '全体攻击' },
-  p_armor: { id: 'p_armor', name: '主公铠甲', kind: 'player', slot: '护甲', stat: { lordHp: 3 }, statText: '主公生命' },
-  p_charm: { id: 'p_charm', name: '聚宝符',   kind: 'player', slot: '饰品', stat: { coin: 0.15 }, statText: '金币收益' },
+  // 玩家装备：作用于全军/主公（p_drum 独立散件，无套装）
+  p_sword: { id: 'p_sword', name: '统帅之剑', kind: 'player', slot: '武器', series: '虎啸', stat: { atk: 0.08 }, statText: '全体攻击' },
+  p_armor: { id: 'p_armor', name: '主公铠甲', kind: 'player', slot: '护甲', series: '虎啸', stat: { lordHp: 3 }, statText: '主公生命' },
+  p_charm: { id: 'p_charm', name: '聚宝符',   kind: 'player', slot: '饰品', series: '虎啸', stat: { coin: 0.15 }, statText: '金币收益' },
   p_drum:  { id: 'p_drum',  name: '进军战鼓', kind: 'player', slot: '饰品', stat: { spd: 0.08 }, statText: '全体攻速' },
+  // 龙腾套装
+  p_dragonWeapon:   { id: 'p_dragonWeapon',   name: '青龙戟', kind: 'player', slot: '武器', series: '龙腾', stat: { atk: 0.10 }, statText: '全体攻击' },
+  p_dragonArmor:    { id: 'p_dragonArmor',    name: '龙鳞甲', kind: 'player', slot: '护甲', series: '龙腾', stat: { lordHp: 3 }, statText: '主公生命' },
+  p_dragonTrinket:  { id: 'p_dragonTrinket',  name: '龙珠',   kind: 'player', slot: '饰品', series: '龙腾', stat: { coin: 0.12 }, statText: '金币收益' },
+  // 凤仪套装
+  p_phoenixWeapon:  { id: 'p_phoenixWeapon',  name: '凤翎扇', kind: 'player', slot: '武器', series: '凤仪', stat: { spd: 0.08 }, statText: '全体攻速' },
+  p_phoenixArmor:   { id: 'p_phoenixArmor',   name: '锦凤袍', kind: 'player', slot: '护甲', series: '凤仪', stat: { lordHp: 2 }, statText: '主公生命' },
+  p_phoenixTrinket: { id: 'p_phoenixTrinket', name: '凤钗',   kind: 'player', slot: '饰品', series: '凤仪', stat: { coin: 0.10 }, statText: '金币收益' },
   // 将士武器：佩戴到兵种槽，作用于该兵种所有将士
   u_blade: { id: 'u_blade', name: '环首刀', kind: 'unit', stat: { atk: 0.12 }, statText: '攻击' },
   u_spear: { id: 'u_spear', name: '亮银枪', kind: 'unit', stat: { atk: 0.06, spd: 0.06 }, statText: '攻击/攻速' },
@@ -24,12 +61,40 @@ export const EQUIP = {
 
 export const rarityById = (id) => RARITIES.find((r) => r.id === id) || RARITIES[0];
 
-// 单件装备的实际数值（稀有度倍率 × 等级成长）
+// 附加词条池与稀有度档位（洗练/掉落重随）
+export const AFFIX_POOL = ['atk', 'spd', 'crit', 'range', 'coin', 'lordHp'];
+export const AFFIX_BOUNDS = {
+  common: { count: 1, min: 0.02, max: 0.05 },
+  fine:   { count: 1, min: 0.03, max: 0.07 },
+  rare:   { count: 2, min: 0.04, max: 0.09 },
+  epic:   { count: 3, min: 0.05, max: 0.12 },
+};
+
+export function rollAffixes(rarity, random = Math.random) {
+  const cfg = AFFIX_BOUNDS[rarity] || AFFIX_BOUNDS.common;
+  const count = cfg.count;
+  const affixes = [];
+  for (let i = 0; i < count; i++) {
+    const key = AFFIX_POOL[Math.floor(random() * AFFIX_POOL.length)];
+    const value = cfg.min + (cfg.max - cfg.min) * random();
+    affixes.push({ key, value: Number(value.toFixed(4)) });
+  }
+  return affixes;
+}
+
+export function rollEquipInstance(id, rarity, random = Math.random) {
+  return { id, rarity, lvl: 1, affixes: rollAffixes(rarity, random) };
+}
+
+// 单件装备的实际数值（稀有度倍率 × 等级成长 + 附加词条）
 export function equipStats(inst) {
   const def = EQUIP[inst.id];
   const mul = rarityById(inst.rarity).mul * (1 + 0.08 * (inst.lvl - 1));
   const out = {};
   for (const k in def.stat) out[k] = def.stat[k] * mul;
+  for (const affix of inst.affixes || []) {
+    out[affix.key] = (out[affix.key] || 0) + affix.value;
+  }
   return out;
 }
 
@@ -67,4 +132,24 @@ export function rollRarity(wave, dropMul) {
 export function rollEquipId() {
   const ids = Object.keys(EQUIP);
   return ids[Math.floor(Math.random() * ids.length)];
+}
+
+// 套装羁绊聚合：按玩家槽位统计各套装件数，返回已触发的羁绊加成
+// （≥2 件触发 2 件套，≥3 件触发 3 件套并覆盖 2 件套）
+export function bondStats(slotMap, ownedList) {
+  const counts = {};
+  for (const slot of PLAYER_SLOTS) {
+    const uid = slotMap && slotMap[slot];
+    if (uid == null) continue;
+    const inst = (ownedList || []).find((e) => e.uid === uid);
+    const series = inst && EQUIP[inst.id] && EQUIP[inst.id].series;
+    if (series) counts[series] = (counts[series] || 0) + 1;
+  }
+  const out = {};
+  for (const [series, count] of Object.entries(counts)) {
+    const bond = SERIES[series] && SERIES[series].bonds[count >= 3 ? 3 : count === 2 ? 2 : 0];
+    if (!bond) continue;
+    for (const [k, v] of Object.entries(bond)) out[k] = (out[k] || 0) + v;
+  }
+  return out;
 }

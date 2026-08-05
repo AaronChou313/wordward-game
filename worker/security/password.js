@@ -3,9 +3,14 @@ import { base64UrlToBytes, bytesToBase64Url, toBytes } from './encoding.js';
 // Keep the PBKDF2 work bounded so malformed records cannot turn verification
 // into an unbounded CPU operation. These bounds are shared by hashing and
 // verification and can be tightened during deployment benchmarking.
+//
+// Cloudflare Workers caps WebCrypto PBKDF2 at 100_000 iterations: requests
+// above it throw NotSupportedError. 100_000 is therefore also the safe
+// default here — anything higher must fail closed before reaching the
+// runtime, never surface as a transient 503.
 export const MIN_PASSWORD_ITERATIONS = 1;
-export const MAX_PASSWORD_ITERATIONS = 1_000_000;
-export const DEFAULT_PASSWORD_ITERATIONS = 120000;
+export const MAX_PASSWORD_ITERATIONS = 100_000;
+export const DEFAULT_PASSWORD_ITERATIONS = 100_000;
 export const PASSWORD_KDF_VERSION = 'PBKDF2-SHA-256-v1';
 const SUPPORTED_KDF_VERSIONS = new Set([PASSWORD_KDF_VERSION, 'v1']);
 
@@ -28,7 +33,7 @@ export function validateCredentials(username, password) {
   const usernameLength = Array.from(normalized).length;
   const passwordLength = Array.from(passwordText).length;
   if (usernameLength < 3 || usernameLength > 24) throw new AuthValidationError('Username must be 3 to 24 characters');
-  if (passwordLength < 10 || passwordLength > 128) throw new AuthValidationError('Password must be 10 to 128 characters');
+  if (passwordLength < 1 || passwordLength > 128) throw new AuthValidationError('Password must be 1 to 128 characters');
   return { username: normalized, password: passwordText };
 }
 

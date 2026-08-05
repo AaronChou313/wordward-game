@@ -53,7 +53,9 @@ export class RefreshBar {
     this.coolMax = REFRESH_BASE_CD + REFRESH_CD_STEP * this.refreshCount;
     this.cool = this.coolMax;
     this.sinceShovel++;
-    const chance = SHOVEL_DROP_CHANCE + (this.diff ? this.diff.shovelAdd : 0);
+    const chance = SHOVEL_DROP_CHANCE
+      + (this.diff ? this.diff.shovelAdd : 0)
+      + Math.min(0.15, this.wave * 0.004);
     if (this.random() < chance || this.sinceShovel > SHOVEL_PITY) {
       this.shovels++;
       this.sinceShovel = 0;

@@ -1,9 +1,12 @@
 // 玩家存档：金币 / 道具 / 已解锁进阶字 / 最高波次
 import { loadData, saveData } from '../core/storage.js';
+import { rollAffixes, rollEquipInstance } from '../config/equipment.js';
 
 const DEFAULT_SAVE = {
-  version: 2,
+  version: 3,
   gold: 300,
+  gems: 10,
+  soulJade: 3,
   items: { owned: {}, equippedActive: [], equippedPassive: [] }, // owned: { itemId: level }
   unlockedChars: ['精', '铁', '赵', '云', '吕', '布'],
   bestWave: 0,
@@ -52,6 +55,12 @@ function mergeDefaults(defaults, saved) {
   return merged;
 }
 
+// 确定性随机：以 uid 为种子，保证迁移幂等（同一次存档两次 migrateSave 结果一致）
+function seededRandom(seed) {
+  let state = (seed % 2147483647) || 1;
+  return () => { state = (state * 48271) % 2147483647; return (state - 1) / 2147483646; };
+}
+
 export function migrateSave(raw) {
   const migrated = mergeDefaults(DEFAULT_SAVE, raw);
   for (const [key, claimed] of Object.entries(migrated.merit.claimed)) {
@@ -63,7 +72,11 @@ export function migrateSave(raw) {
     }
     delete migrated.merit.claimed[key];
   }
-  migrated.version = 2;
+  // 为历史装备补填附加词条（确定性种子，迁移可幂等）
+  for (const inst of migrated.equipment?.owned || []) {
+    if (!Array.isArray(inst.affixes)) inst.affixes = rollAffixes(inst.rarity, seededRandom(inst.uid || 1));
+  }
+  migrated.version = 3;
   return migrated;
 }
 
@@ -98,6 +111,11 @@ export function spendGold(n) {
   return true;
 }
 
+export function addGems(n) { getSave().gems += n; persist(); }
+export function addSoulJade(n) { getSave().soulJade += n; persist(); }
+export function spendGems(n) { const s = getSave(); if ((s.gems || 0) < n) return false; s.gems -= n; persist(); return true; }
+export function spendSoulJade(n) { const s = getSave(); if ((s.soulJade || 0) < n) return false; s.soulJade -= n; persist(); return true; }
+
 export function unlockChar(char) {
   const s = getSave();
   if (!s.unlockedChars.includes(char)) {
@@ -117,7 +135,7 @@ export function grantEquip(id, rarity) {
     persist();
     return { inst: dup, merged: true };
   }
-  const inst = { uid: s.equipment.nextUid++, id, rarity, lvl: 1 };
+  const inst = { uid: s.equipment.nextUid++, ...rollEquipInstance(id, rarity) };
   s.equipment.owned.push(inst);
   persist();
   return { inst, merged: false };

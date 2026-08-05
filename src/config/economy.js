@@ -3,8 +3,8 @@ export const REFRESH_BASE_CD = 30;   // 初始冷却秒
 export const REFRESH_CD_STEP = 5;    // 每刷新一次 +5s
 export const KILL_CD_REDUCE = 0.5;   // 击杀一只怪 -0.5s 剩余冷却
 export const REFRESH_SLOTS = 5;
-export const SHOVEL_DROP_CHANCE = 0.45;
-export const SHOVEL_PITY = 3;        // 连续 N 次刷新未掉铲子则必掉
+export const SHOVEL_DROP_CHANCE = 0.55;
+export const SHOVEL_PITY = 2;        // 连续 N 次刷新未掉铲子则必掉
 
 // 结算金币
 export const coinsFor = (wave, kills) => wave * 10 + kills;

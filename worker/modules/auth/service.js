@@ -4,6 +4,7 @@ import { toPublicUser, toUser } from '../../db/rows.js';
 import { hashRefreshToken, requireSecret } from '../../security/hmac.js';
 import {
   DEFAULT_PASSWORD_ITERATIONS,
+  MAX_PASSWORD_ITERATIONS,
   PASSWORD_KDF_VERSION,
   hashPassword,
   validateCredentials,
@@ -37,7 +38,10 @@ function nowMs(now) {
 
 function configuredIterations(env) {
   const value = Number(env?.PASSWORD_KDF_ITERATIONS ?? DEFAULT_PASSWORD_ITERATIONS);
-  return Number.isInteger(value) && value > 0 ? value : DEFAULT_PASSWORD_ITERATIONS;
+  if (!Number.isInteger(value) || value <= 0) return DEFAULT_PASSWORD_ITERATIONS;
+  // Workers' WebCrypto rejects PBKDF2 above MAX_PASSWORD_ITERATIONS; clamping
+  // here keeps a misconfigured variable from turning registration into a 503.
+  return Math.min(value, MAX_PASSWORD_ITERATIONS);
 }
 
 function configuredVersion(env) {

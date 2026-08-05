@@ -1,6 +1,28 @@
 import { Button } from '../ui/button.js';
-import { blurCanvasTextInput, focusCanvasTextInput } from '../ui/canvasTextInput.js';
+import { focusCanvasTextInput, resetCanvasTextInput } from '../ui/canvasTextInput.js';
 import { getCurrentUser, login, register, restoreSession } from '../net/apiClient.js';
+import { flushMeritClaims } from '../net/meritClient.js';
+import { authenticatedSceneName } from '../startup.js';
+
+export function validateAccountCredentials(usernameValue, passwordValue) {
+  const username = String(usernameValue || '').normalize('NFKC').trim();
+  const password = String(passwordValue ?? '');
+  if (Array.from(username).length < 3 || Array.from(username).length > 24) {
+    return { username, password, error: '用户名需为 3–24 个字符' };
+  }
+  if (Array.from(password).length < 1 || Array.from(password).length > 128) {
+    return { username, password, error: '密码需为 1–128 个字符' };
+  }
+  return { username, password, error: '' };
+}
+
+export function accountErrorMessage(error) {
+  if (error?.data?.code === 'ORIGIN_MISMATCH') return '当前访问地址不受支持，请使用本站正式域名访问';
+  if (error?.data?.code === 'TURNSTILE_FAILED') return '安全验证失败，请刷新页面后重试';
+  if (error?.status === 429) return '请求过于频繁，请稍后重试';
+  if (error?.status === 503) return '服务暂时不可用，请稍后重试';
+  return error?.message || '连接失败，请稍后重试';
+}
 
 export class AccountScene {
   constructor(scenes) {
@@ -11,7 +33,6 @@ export class AccountScene {
     this.active = null;
     this.busy = false;
     this.message = '';
-    this.back = new Button(40, 36, 130, 58, '返回', () => scenes.switch('home'), { fontSize: 26 });
     this.submit = new Button(150, 700, 450, 78, '登 录', () => this.submitForm(), { fontSize: 34, bg: '#7a2a20' });
     this.toggle = new Button(150, 800, 450, 68, '没有账号？前往注册', () => this.toggleMode(), { fontSize: 24 });
   }
@@ -30,7 +51,7 @@ export class AccountScene {
     if (!params.mode) this.restore();
   }
 
-  exit() { this.lifecycle = null; blurCanvasTextInput(); }
+  exit() { this.lifecycle = null; this.active = null; resetCanvasTextInput(); }
   update() {}
 
   async restore() {
@@ -40,7 +61,7 @@ export class AccountScene {
     const restored = await restoreSession();
     if (this.lifecycle !== lifecycle) return;
     if (restored) {
-      this.scenes.switch('profile');
+      this.scenes.switch(authenticatedSceneName());
       return;
     }
     this.busy = false;
@@ -50,6 +71,8 @@ export class AccountScene {
   toggleMode() {
     this.mode = this.mode === 'login' ? 'register' : 'login';
     this.password = '';
+    this.active = null;
+    resetCanvasTextInput();
     this.message = '';
     this.syncLabels();
   }
@@ -72,33 +95,27 @@ export class AccountScene {
 
   async submitForm() {
     if (this.busy) return;
-    const username = this.username.normalize('NFKC').trim();
-    if (Array.from(username).length < 3 || Array.from(username).length > 24) {
-      this.message = '用户名需为 3–24 个字符';
-      return;
-    }
-    if (Array.from(this.password).length < 10 || Array.from(this.password).length > 128) {
-      this.message = '密码需为 10–128 个字符';
-      return;
-    }
+    const credentials = validateAccountCredentials(this.username, this.password);
+    if (credentials.error) return void (this.message = credentials.error);
+    this.active = null;
+    resetCanvasTextInput();
     this.busy = true;
     this.message = '连接中…';
     try {
-      if (this.mode === 'login') await login(username, this.password);
-      else await register(username, this.password);
-      blurCanvasTextInput();
-      this.scenes.switch('profile');
+      if (this.mode === 'login') await login(credentials.username, credentials.password);
+      else await register(credentials.username, credentials.password);
+      this.active = null;
+      resetCanvasTextInput();
+      flushMeritClaims(); // 补发登录前未提交的军功
+      this.scenes.switch(authenticatedSceneName());
     } catch (error) {
-      if (error?.status === 429) this.message = '请求过于频繁，请稍后重试';
-      else if (error?.status === 503) this.message = '服务暂时不可用，请稍后重试';
-      else this.message = error.message || '连接失败，请稍后重试';
+      this.message = accountErrorMessage(error);
     } finally {
       this.busy = false;
     }
   }
 
   onPointerDown(x, y) {
-    if (this.back.hitTest(x, y)) return this.back.onClick();
     if (inside(x, y, 120, 390, 510, 78)) return this.focus('username');
     if (inside(x, y, 120, 520, 510, 78)) return this.focus('password');
     if (this.submit.hitTest(x, y)) return this.submit.onClick();
@@ -109,7 +126,6 @@ export class AccountScene {
 
   render(ctx) {
     ctx.fillStyle = '#181209'; ctx.fillRect(0, 0, 750, 1334);
-    this.back.draw(ctx);
     ctx.textAlign = 'center';
     ctx.fillStyle = '#e8c35a'; ctx.font = 'bold 58px KaiTi, serif';
     ctx.fillText(this.mode === 'login' ? '账号登录' : '创建账号', 375, 230);

@@ -3,7 +3,7 @@ import { decodeBase64Url, encodeBase64Url } from './encoding.js';
 import { hashCursor, hashRefreshToken, requireSecret, SecretConfigurationError } from './hmac.js';
 import { signAccessToken, verifyAccessToken } from './jwt.js';
 import { clearRefreshCookie, setRefreshCookie } from './cookies.js';
-import { hashPassword, normalizeUsername, validateCredentials, verifyPassword } from './password.js';
+import { hashPassword, MAX_PASSWORD_ITERATIONS, MIN_PASSWORD_ITERATIONS, normalizeUsername, validateCredentials, verifyPassword } from './password.js';
 import { verifyTurnstile } from './turnstile.js';
 import { requireSameOrigin } from '../middleware/origin.js';
 import { consumeLimit } from '../middleware/limits.js';
@@ -11,9 +11,9 @@ import { consumeLimit } from '../middleware/limits.js';
 describe('Worker security primitives', () => {
   it('normalizes usernames and enforces credential lengths', () => {
     expect(normalizeUsername('  Ａlice  ')).toBe('alice');
-    expect(validateCredentials(' Alice ', '1234567890')).toEqual({ username: 'alice', password: '1234567890' });
+    expect(validateCredentials(' Alice ', 'x')).toEqual({ username: 'alice', password: 'x' });
     expect(() => validateCredentials('ab', '1234567890')).toThrow(/Username/);
-    expect(() => validateCredentials('alice', 'short')).toThrow(/Password/);
+    expect(() => validateCredentials('alice', '')).toThrow(/Password/);
     expect(() => validateCredentials('alice', 'x'.repeat(129))).toThrow(/Password/);
   });
 
@@ -39,6 +39,17 @@ describe('Worker security primitives', () => {
     await expect(hashPassword('correct horse', { iterations: 0 })).rejects.toThrow(/iterations/);
     await expect(hashPassword('correct horse', { iterations: Number.NaN })).rejects.toThrow(/iterations/);
     await expect(hashPassword('correct horse', { iterations: Number.POSITIVE_INFINITY })).rejects.toThrow(/iterations/);
+  });
+
+  it('caps PBKDF2 iterations at the Workers runtime limit', async () => {
+    expect(MAX_PASSWORD_ITERATIONS).toBe(100_000);
+    expect(MIN_PASSWORD_ITERATIONS).toBeLessThanOrEqual(1);
+    // Workers' WebCrypto throws NotSupportedError above 100k; rejecting it in
+    // validation keeps registration from surfacing as a transient 503.
+    await expect(hashPassword('correct horse', { iterations: MAX_PASSWORD_ITERATIONS + 1 })).rejects.toThrow(/iterations/);
+    const record = await hashPassword('correct horse', { iterations: MAX_PASSWORD_ITERATIONS });
+    expect(record.iterations).toBe(MAX_PASSWORD_ITERATIONS);
+    expect(await verifyPassword('correct horse', record)).toBe(true);
   });
 
   it('round-trips base64url without Node Buffer', () => {
@@ -77,12 +88,28 @@ describe('Worker security primitives', () => {
     expect(headers.get('Set-Cookie')).toBe('wordward_refresh=; Max-Age=0; Path=/api/auth; HttpOnly; Secure; SameSite=Lax');
   });
 
-  it('accepts same-origin state changes and rejects cross-origin API requests', () => {
+  it('accepts same-origin state changes and rejects cross-origin API requests', async () => {
     const env = { APP_ORIGIN: 'https://wordward.example' };
     expect(requireSameOrigin(new Request('https://wordward.example/api/save', { method: 'POST', headers: { Origin: env.APP_ORIGIN } }), env)).toBeNull();
+    expect(requireSameOrigin(new Request('https://wordward.example/api/save', { method: 'POST', headers: { Referer: `${env.APP_ORIGIN}/game` } }), env)).toBeNull();
+    expect(requireSameOrigin(new Request('https://wordward.example/api/save', { method: 'POST', headers: { 'Sec-Fetch-Site': 'same-origin' } }), env)).toBeNull();
     const rejected = requireSameOrigin(new Request('https://wordward.example/api/save', { method: 'POST', headers: { Origin: 'https://evil.example' } }), env);
     expect(rejected).toBeInstanceOf(Response);
     expect(rejected.status).toBe(403);
+    expect(await rejected.json()).toEqual({ error: 'Forbidden', code: 'ORIGIN_MISMATCH' });
+    expect(requireSameOrigin(new Request('https://evil.example/api/save', { method: 'POST', headers: { 'Sec-Fetch-Site': 'same-origin' } }), env)).toMatchObject({ status: 403 });
+    expect(requireSameOrigin(new Request('https://wordward.example/api/save', { method: 'POST', headers: { 'Sec-Fetch-Site': 'cross-site' } }), env)).toMatchObject({ status: 403 });
+  });
+
+  it('accepts application-marked requests from privacy browsers without trusting cross-site requests', () => {
+    const env = { APP_ORIGIN: 'https://wordward.example' };
+    const applicationHeaders = { 'X-Wordward-Request': '1' };
+
+    expect(requireSameOrigin(new Request('https://wordward.example/api/save', { method: 'POST', headers: applicationHeaders }), env)).toBeNull();
+    expect(requireSameOrigin(new Request('https://wordward.example/api/save', { method: 'POST', headers: { ...applicationHeaders, Origin: 'null' } }), env)).toBeNull();
+    expect(requireSameOrigin(new Request('https://wordward.example/api/save', { method: 'POST', headers: { ...applicationHeaders, 'Sec-Fetch-Site': 'cross-site' } }), env)).toMatchObject({ status: 403 });
+    expect(requireSameOrigin(new Request('https://wordward.example/api/save', { method: 'POST', headers: { ...applicationHeaders, Origin: 'https://evil.example' } }), env)).toMatchObject({ status: 403 });
+    expect(requireSameOrigin(new Request('https://evil.example/api/save', { method: 'POST', headers: applicationHeaders }), env)).toMatchObject({ status: 403 });
   });
 
   it('fails closed for unsafe API requests when the app origin is unavailable or malformed', () => {
