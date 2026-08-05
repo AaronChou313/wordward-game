@@ -30,7 +30,7 @@ vi.mock('./saveData.js', () => ({
   spendSoulJade: (n) => { if ((currentSave.soulJade || 0) < n) return false; currentSave.soulJade -= n; return true; },
 }));
 
-import { EquipScene } from './equipScene.js';
+import { EquipScene, ROW_H } from './equipScene.js';
 
 describe('EquipScene list scrolling', () => {
   it('does not equip when dragging past the threshold', () => {
@@ -46,8 +46,9 @@ describe('EquipScene list scrolling', () => {
   it('equips on a tap with no drag', () => {
     const scene = new EquipScene({ switch: () => {} });
     const save = fakeSave(3);
-    scene.onPointerDown(100, 500);
-    scene.onPointerUp(102, 501); // moved < 10px
+    // 新几何：第一行行顶 y=470，装备按钮区（x 60-210, y 536-584）内
+    scene.onPointerDown(100, 550);
+    scene.onPointerUp(100, 550); // moved < 10px
     expect(save.equipment.player['武器']).toBe(1); // first owned uid equipped
   });
 
@@ -83,6 +84,28 @@ describe('EquipScene list scrolling', () => {
     expect(save.soulJade).toBe(2); // cost 1 soul jade
     // common rarity re-rolls 1 affix; random=0.5 -> key 'range', value 0.02+(0.05-0.02)*0.5
     expect(inst.affixes).toEqual([{ key: 'range', value: 0.035 }]);
+  });
+});
+
+describe('EquipScene two-zone rows', () => {
+  it('uses a taller row so text and buttons do not overlap', () => {
+    expect(ROW_H).toBeGreaterThanOrEqual(120);
+  });
+
+  it('places the enhance and refine buttons in the bottom zone of the row', () => {
+    const scene = new EquipScene({ switch: () => {} });
+    const er = scene.enhanceRect(500);
+    const rr = scene.refineRect(500);
+    const eq = scene.equipRect(500);
+    // buttons sit below the text zone (text is ~top to top+62)
+    expect(er.y).toBeGreaterThanOrEqual(500 + 66);
+    expect(rr.y).toBeGreaterThanOrEqual(500 + 66);
+    expect(eq.y).toBeGreaterThanOrEqual(500 + 66);
+    // 三个按钮并排（装备→升→洗练，从左到右），互不重叠，均落在行宽内
+    expect(eq.x).toBeLessThan(er.x);
+    expect(er.x).toBeLessThan(rr.x);
+    expect(eq.x).toBeGreaterThanOrEqual(60);
+    expect(rr.x + rr.w).toBeLessThanOrEqual(681);
   });
 });
 

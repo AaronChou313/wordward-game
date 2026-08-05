@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { RefreshBar } from '../battle/refreshBar.js';
 import { ITEMS } from './items.js';
 
-const ACTIVE_IDS = ['fire', 'recruit', 'train', 'reinforce', 'warDrum'];
-const PASSIVE_IDS = ['power', 'swift', 'goldpot', 'fortification', 'bossBane', 'resolute'];
+const ACTIVE_IDS = ['fire', 'recruit', 'train', 'reinforce', 'warDrum', 'frost', 'thunder', 'heal', 'summon'];
+const PASSIVE_IDS = ['power', 'swift', 'goldpot', 'fortification', 'bossBane', 'resolute', 'critFlag', 'rapidFlag', 'granary', 'ironwall'];
 
 describe('item configuration', () => {
   it('defines unique IDs and complete shared descriptions', () => {
@@ -51,15 +51,23 @@ describe('item configuration', () => {
     expect(ITEMS.fortification.buffs(1)).toMatchObject({ blockerHp: 0.25, blockerCapacity: 1 });
     expect(ITEMS.bossBane.buffs(1)).toMatchObject({ bossDamage: 0.25 });
     expect(ITEMS.resolute.buffs(1)).toMatchObject({ stunDuration: 0.2 });
+    expect(ITEMS.frost).toMatchObject({ name: '冰霜符', castMode: 'instant', effect: { type: 'slow-all' } });
+    expect(ITEMS.thunder).toMatchObject({ name: '雷击符', castMode: 'instant', effect: { type: 'damage-strongest' } });
+    expect(ITEMS.heal).toMatchObject({ name: '治疗符', castMode: 'instant', effect: { type: 'heal-lord' } });
+    expect(ITEMS.summon).toMatchObject({ name: '召唤符', castMode: 'instant', effect: { type: 'summon-random' } });
+    expect(ITEMS.critFlag.buffs(1)).toMatchObject({ crit: 0.08 });
+    expect(ITEMS.rapidFlag.buffs(1)).toMatchObject({ spd: 0.08 });
+    expect(ITEMS.granary.buffs(1)).toMatchObject({ coin: 0.15 });
+    expect(ITEMS.ironwall.buffs(1)).toMatchObject({ blockerDamageReduction: 0.15 });
   });
 });
 
 describe('active item dispatch', () => {
   it('provides one handler for every configured active effect type', async () => {
     const { ACTIVE_ITEM_HANDLERS } = await import('../battle/battleScene.js');
-    const configuredTypes = Object.values(ITEMS)
+    const configuredTypes = [...new Set(Object.values(ITEMS)
       .filter((item) => item.kind === 'active')
-      .map((item) => item.effect.type);
+      .map((item) => item.effect.type))];
 
     expect(Object.keys(ACTIVE_ITEM_HANDLERS)).toEqual(configuredTypes);
   });

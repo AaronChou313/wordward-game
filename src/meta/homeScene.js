@@ -6,9 +6,23 @@ import { getSave, persist } from './saveData.js';
 import { availableDiffs } from '../config/difficulty.js';
 import { flushMeritClaims } from '../net/meritClient.js';
 
+// 最高纪录文案：取已解锁难度中（含无尽各层）最高波，附难度名；无记录时回退到 bestWave
+export function bestRecordText(save) {
+  const diffs = availableDiffs(save.diff);
+  let best = null;
+  for (const d of diffs) {
+    const key = d.id === 'endless' ? 'endless' + d.floor : d.id;
+    const wave = (save.diff.best || {})[key] || 0;
+    if (!best || wave > best.wave) best = { diff: d, wave };
+  }
+  if (!best || best.wave <= 0) return '最高纪录：坚守 ' + (save.bestWave || 0) + ' 波';
+  return '最高纪录：' + best.diff.name + ' ' + best.wave + ' 波';
+}
+
 export class HomeScene {
   constructor(scenes) {
     this.scenes = scenes;
+    this.btnHelp = new Button(650, 180, 60, 60, '？', () => { Audio.click(); scenes.switch('help'); }, { fontSize: 36 });
     this.btnPrev = new Button(175, 548, 60, 60, '‹', () => this.cycleDiff(-1), { fontSize: 36 });
     this.btnNext = new Button(515, 548, 60, 60, '›', () => this.cycleDiff(1), { fontSize: 36 });
     this.buttons = [
@@ -49,6 +63,7 @@ export class HomeScene {
   update(dt) { Toast.update(dt); }
 
   onPointerDown(x, y) {
+    if (this.btnHelp.hitTest(x, y)) return this.btnHelp.onClick();
     if (this.btnPrev.hitTest(x, y)) return this.btnPrev.onClick();
     if (this.btnNext.hitTest(x, y)) return this.btnNext.onClick();
     for (const b of this.buttons) if (b.hitTest(x, y)) return b.onClick();
@@ -77,10 +92,10 @@ export class HomeScene {
     const save = getSave();
     ctx.fillStyle = '#f0d8a8';
     ctx.font = '30px KaiTi, STKaiti, serif';
-    ctx.fillText('金币 ' + save.gold, 375, 420);
+    ctx.fillText(`金币 ${save.gold} · 宝石 ${save.gems || 0} · 魂玉 ${save.soulJade || 0}`, 375, 420);
     ctx.fillStyle = '#a8d8a0';
     ctx.font = '26px KaiTi, STKaiti, serif';
-    ctx.fillText('最高纪录：坚守 ' + save.bestWave + ' 波', 375, 465);
+    ctx.fillText(bestRecordText(save), 375, 465);
     ctx.restore();
 
     // 难度选择
@@ -101,6 +116,7 @@ export class HomeScene {
     ctx.font = '20px KaiTi, STKaiti, serif';
     ctx.fillText('难度（通关低难度可解锁更高）', 375, 532);
     ctx.restore();
+    this.btnHelp.draw(ctx);
     this.btnPrev.draw(ctx);
     this.btnNext.draw(ctx);
 

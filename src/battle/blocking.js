@@ -16,8 +16,10 @@ export function blockStats(tier, level, itemBuffs = {}) {
   };
 }
 
-export function blockDamage(enemy) {
-  return Math.max(BLOCKING.minEnemyDamage, Math.round(enemy.maxHp * BLOCKING.enemyDamageRate));
+export function blockDamage(enemy, itemBuffs = {}) {
+  const base = Math.max(BLOCKING.minEnemyDamage, Math.round(enemy.maxHp * BLOCKING.enemyDamageRate));
+  const reduced = base * (1 - (itemBuffs.blockerDamageReduction || 0));
+  return Math.max(1, Math.round(reduced));
 }
 
 export function assignBlockers(infantry, enemies) {
